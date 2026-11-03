@@ -249,6 +249,8 @@ def ask_store_questions(a, answers: dict) -> dict:
         answers["devices"] = ",".join(p for p in picked if p and not I.is_blank(p))
     if "appstore" in stores and not answers.get("previews"):
         answers["previews"] = _ask_valid(qs["previews"], I.parse_previews)
+    if not a.keywords:
+        a.keywords = _ask(f"{qs['keywords']['question']} (Enter = {qs['keywords']['default']}): ") or None
     if not a.icon:
         a.icon = _ask(f"{qs['icon']['question']} (Enter = {qs['icon']['default']}): ") or None
     if not a.out:
@@ -367,10 +369,13 @@ def cmd_plan(a, quiet=False) -> dict:
     check_langs(langs)
     shots, sets = scan_shots(a.shots, langs)
     copy_path = Path(a.copy)
+    keywords = copywriter.parse_keywords(getattr(a, "keywords", None))
     if copy_path.exists() and not a.regen:
         if not quiet:
             print(f"Using the existing copy file: {copy_path}  (use --regen to create it again)")
         data = read_copy(copy_path)
+        if keywords and keywords != data.get("keywords"):
+            print("WARNING: --keywords was not applied because the copy file already exists (use --regen).", file=sys.stderr)
         if (a.app and a.app != data.get("app")) or set(shots) != set(data.get("shots") or {}):
             print(f"WARNING: {copy_path} belongs to another app or other screenshots; "
                   "the new input is not used (create it again with --regen).", file=sys.stderr)
@@ -382,7 +387,7 @@ def cmd_plan(a, quiet=False) -> dict:
     if inp["template"] and inp["template"] not in templates:  # --template my.json
         templates[inp["template"]] = load_template(inp["template"])
     ctx = dict(app=inp["app"], about=inp["about"], tone=a.tone, langs=langs, templates=templates, profile=profile,
-               locked=inp["locked"],
+               locked=inp["locked"], keywords=keywords,
                fixed=dict(colors=inp["colors"], count=inp["count"], template=inp["template"],
                           dimension=inp["dimension"], category=inp["category"]))
     if (inp["count"] or 0) > 10:
@@ -397,6 +402,9 @@ def cmd_plan(a, quiet=False) -> dict:
                design=d, shots={n: rel(p, copy_path.parent) for n, p in shots.items()}, slides=data["slides"])
     if sets:
         out["shots_by_set"] = {k: {n: rel(p, copy_path.parent) for n, p in m.items()} for k, m in sets.items()}
+    if keywords:
+        out["keywords"] = keywords
+        warn_keywords(keywords, data["slides"], used)
     write_copy(copy_path, out)
     print_design(d)
     print(f"Wrote: {copy_path}  (edit it and redraw with `shotforge render`)")
@@ -404,6 +412,17 @@ def cmd_plan(a, quiet=False) -> dict:
         if _ask("Continue with this design? [Y/n]: ", "y").lower().startswith("n"):
             raise SystemExit(f"Stopped. Edit {copy_path} and run `shotforge render`.")
     return out
+
+
+def warn_keywords(keywords: list[str], slides: list[dict], used: str):
+    if used in ("offline", "user"):
+        print(f"WARNING: --keywords needs an AI backend to shape the copy; this run's text came from {used} and was not changed.", file=sys.stderr)
+    gaps = copywriter.keyword_gaps(slides, keywords)
+    if gaps:
+        print(f"Keywords not found word for word in any slide (a localized term may have been used): {', '.join(gaps)}")
+    risky = [k for k in keywords if I.PLAY_AVOID_RE.search(k)]
+    if risky:
+        print(f"WARNING: Google Play guidelines advise against these words in store images: {', '.join(risky)}", file=sys.stderr)
 
 
 def print_design(d: dict):
@@ -955,6 +974,7 @@ def add_design_args(p):
     g.add_argument("--app", default=None, help="app name")
     g.add_argument("--about", default="", help="what the app does (1–3 sentences)")
     g.add_argument("--tone", default="confident, friendly, benefit-first", help="copy tone")
+    g.add_argument("--keywords", default=None, metavar="A,B,C", help="search keywords the AI should work into the headlines where they read naturally")
     g.add_argument("--ai", default="auto", choices=["auto", "claude", "api", "openai", "offline"])
     g.add_argument("--model", default=None, help="model name for the chosen backend (optional)")
     g.add_argument("--regen", action="store_true", help="create the copy file again even if it exists")

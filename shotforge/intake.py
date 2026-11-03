@@ -19,6 +19,8 @@ DEFAULT_LANGS = ("en", "tr")
 OUTPUT_MODES = ("both", "folder", "zip")
 PLAY_MAX_SHOTS = 8
 TABLET_MIN_SHOTS = 4
+# Google Play rehberinin görselde önermediği ifadeler (notes_for ile aynı liste)
+PLAY_AVOID_RE = re.compile(r"\b(best|free|download now)\b|#1", re.I)
 # Inter fontunda karşılığı olmayan yazılar
 NO_GLYPH_LANGS = ("ja", "ko", "zh", "ar", "he", "hi", "th")
 
@@ -55,6 +57,7 @@ QUESTIONS = [
     dict(id="count", question="How many pages (slides)? 1–10", kind="number", default="6–7",
          note="Google Play takes at most 8 images per device type."),
     dict(id="texts", question="Who should write the headlines?", kind="choice", options=["ai", "me", "file"], default="ai"),
+    dict(id="keywords", question="Which search keywords should the headlines target? (comma-separated)", kind="text", default="none"),
     dict(id="tone", question="What tone should the copy have?", kind="text", default="confident, friendly, benefit-first"),
     dict(id="background_color", question="Main background colour (#hex)", kind="color", default="from the screenshots"),
     dict(id="text_color", question="Text colour (#hex)", kind="color", default="a readable colour is chosen automatically"),
