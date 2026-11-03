@@ -337,11 +337,17 @@ def finalize(data: dict | None, ctx, shots: list[str]) -> dict:
         else:
             keep_dim = fixed.get("dimension") or (templates[cand]["dimension"] if ok else None)
             tname, _, rs = P.choose_template(templates, dimension=keep_dim, category=category,
-                                             bg_hex=colors.get("background"), profile=profile, tone=ctx["tone"])
+                                             bg_hex=colors.get("background") or (profile or {}).get("brand"), profile=profile, tone=ctx["tone"])
             pre = (f"Claude'un önerdiği '{cand}' ({templates[cand].get('theme')}), verdiğiniz arka plan rengiyle "
                    f"({user_bg}) uyumsuz; " if theme_clash else "")
             reason = pre + "kural motoru: " + "; ".join(rs)
     dimension = templates[tname]["dimension"]
+
+    source = "user" if fc.get("background") else ("claude" if colors.get("background") else None)
+    if "background" not in colors:
+        derived = {k: v for k, v in P.default_colors(profile, templates[tname].get("theme") if fixed.get("template") else None).items() if k not in colors}
+        colors.update(derived)
+        source = "screenshots" if derived else "template"
 
     # model çıktısı güvenilmez: yalnızca metin alanları geçer, çizim ayarları geçmez
     slides = [{k: s[k] for k in ("shot", "role", "title", "subtitle") if k in s} for s in (data.get("slides") or [])]
@@ -370,7 +376,7 @@ def finalize(data: dict | None, ctx, shots: list[str]) -> dict:
                     if v:
                         s[key][l] = v
     design = dict(category=category, dimension=dimension, template=tname, template_reason=reason,
-                  colors=colors, count=count)
+                  colors=colors, colors_source=source, count=count)
     return {"design": design, "slides": slides}
 
 

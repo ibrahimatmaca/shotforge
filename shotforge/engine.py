@@ -23,6 +23,25 @@ DEVICES = {
     "iphone-6.5": dict(size=(1284, 2778), kind="phone", asc="APP_IPHONE_65", label='iPhone 6.5"'),
     "ipad-13": dict(size=(2064, 2752), kind="tablet", asc="APP_IPAD_PRO_3GEN_129", label='iPad 13"'),
     "ipad-12.9": dict(size=(2048, 2732), kind="tablet", asc="APP_IPAD_PRO_3GEN_129", label='iPad Pro 12.9"'),
+    # Google Play: tuval 9:16, cihazın ekranı daha uzun (screen_aspect); çerçevede iPhone adası yok
+    "android-phone": dict(size=(1080, 1920), kind="phone", asc="ANDROID_PHONE", label="Google Play telefon",
+                          screen_aspect=20 / 9, island=False),
+    "android-tablet-7": dict(size=(1440, 2560), kind="tablet", asc="ANDROID_TABLET_7", label='Google Play 7" tablet',
+                             screen_aspect=16 / 10, island=False),
+    "android-tablet-10": dict(size=(2160, 3840), kind="tablet", asc="ANDROID_TABLET_10", label='Google Play 10" tablet',
+                              screen_aspect=16 / 10, island=False),
+}
+
+# Yatay mağaza görselleri. works_with yalnızca bilgi amaçlıdır; App Store Connect önizlemesiyle doğrulayın.
+BANNERS = {
+    "5244x2950": dict(size=(5244, 2950), store="app-store", folder="header-search", device="iphone-6.9",
+                      crop_safe=True, works_with="App Store: product page header + search results (16:9, PNG)"),
+    "3840x2560": dict(size=(3840, 2560), store="app-store", folder="header-search", device="iphone-6.9",
+                      works_with="App Store: search results only (3:2)"),
+    "1920x1280": dict(size=(1920, 1280), store="app-store", folder="header-search", device="iphone-6.9",
+                      works_with="App Store: search results only (3:2)"),
+    "1024x500": dict(size=(1024, 500), store="google-play", folder="feature-graphic", device="android-phone",
+                     works_with="Google Play: feature graphic"),
 }
 
 PREVIEW_SIZES = {
@@ -245,14 +264,14 @@ class TextBlock:
         return dict(lines=lines, font=font, space=space, line_h=size * lh, color=color, gap=gap, size=size,
                     accent_ok=accent_ok)
 
-    def draw(self, canvas: Image.Image, top: float):
+    def draw(self, canvas: Image.Image, top: float, dx: float = 0):
         d = ImageDraw.Draw(canvas, "RGBA")
         y = top
         for p in self.parts:
             y += p["gap"]
             asc = p["font"].getmetrics()[0]
             for words, width in p["lines"]:
-                x = (self.W - width) / 2 if self.align == "center" else self.margin
+                x = dx + ((self.W - width) / 2 if self.align == "center" else self.margin)
                 for w, acc, ww in words:
                     fill = (*self.accent, 255) if (acc and p["accent_ok"]) else p["color"]
                     d.text((x, y + asc + (p["line_h"] - p["size"]) / 2 * 0.6), w, font=p["font"], fill=fill, anchor="ls")
@@ -263,10 +282,15 @@ class TextBlock:
 # --------------------------------------------------------------------------- #
 # Cihaz çerçevesi (ön yüz)
 # --------------------------------------------------------------------------- #
+def screen_ratio(dev: dict) -> float:
+    """Cihaz ekranının yükseklik/genişlik oranı; tuval oranından farklı olabilir (Google Play 9:16)."""
+    return dev.get("screen_aspect") or dev["size"][1] / dev["size"][0]
+
+
 def make_face(shot: Image.Image, dev: dict, colors, Bw: int, rim_frac: float = 0.008):
     light, dark = colors
     phone = dev["kind"] == "phone"
-    sa = dev["size"][1] / dev["size"][0]
+    sa = screen_ratio(dev)
     bez = (0.026 if phone else 0.046) * Bw
     body_r = (0.158 if phone else 0.060) * Bw
     sw = int(round(Bw - 2 * bez))
@@ -300,7 +324,7 @@ def make_face(shot: Image.Image, dev: dict, colors, Bw: int, rim_frac: float = 0
 
     scr = ImageOps.fit(shot.convert("RGB"), (sw, sh), Image.LANCZOS).convert("RGBA")
     sr = body_r - bez
-    if phone:
+    if phone and dev.get("island", True):
         iw, ih, iy = 0.285 * sw, 0.043 * sw * 1.9, 0.027 * sw
         pill = rr_mask((sw, sh), ((sw - iw) / 2, iy, (sw + iw) / 2, iy + ih), ih / 2)
         scr.paste(Image.new("RGBA", (sw, sh), (0, 0, 0, 255)), (0, 0), pill)
@@ -352,7 +376,7 @@ def homography(dst, src):
 def draw_phone(canvas, shot, dev, colors, p, region, persp=3.0, depth=0.085, glow=None, rim=0.008):
     """region = (x0, y0, x1, y1) SS piksel. glow = dict(color, blur, alpha) veya None."""
     CW, CH = canvas.size
-    sa = dev["size"][1] / dev["size"][0]
+    sa = screen_ratio(dev)
     phone = dev["kind"] == "phone"
     bez_f = 0.026 if phone else 0.046
     bw0 = 1000.0
@@ -624,8 +648,64 @@ def render_slide(cfg: dict, locale: str | None, idx: int = 0, total: int = 1) ->
     return out if cfg.get("no_grain") else add_grain(out)
 
 
+def render_banner(cfg: dict, locale: str | None) -> Image.Image:
+    """Yatay mağaza görseli: solda ikon + metin, sağda 3 cihaz.
+    crop_safe: tek görsel hem 21:9 başlıkta hem 3:2 aramada kırpılarak gösterilir. Ortalanmış iki kırpmada da kalan alan
+    x %8–92, y %12–88'dir; içerik orada tutulur. Bu hesap Apple'ın şablonundaki güvenli alan değildir, önizlemeyle kontrol edin."""
+    W, H = BANNERS[cfg["banner"]]["size"]
+    ss = 1 if W * H > 8_000_000 else SS  # 5244x2950 x2 yaklaşık 250 MB eder
+    cw, ch = W * ss, H * ss
+    bg, lum = make_background((cw, ch), cfg["bg"], cfg.get("bg_angle"), glow=not cfg.get("no_glow"))
+    dark_bg = lum < 0.58
+    text_color = hex2rgb(cfg["text_color"]) if cfg.get("text_color") else ((255, 255, 255) if dark_bg else (17, 24, 39))
+    accent = hex2rgb(cfg["accent"]) if cfg.get("accent") else ((253, 224, 71) if dark_bg else (124, 58, 237))
+    canvas = bg
+
+    three_d = cfg.get("dimension") == "3d"
+    dev = DEVICES[cfg["device"]]
+    colors = resolve_frame(cfg["frame"])
+    safe = BANNERS[cfg["banner"]].get("crop_safe")
+    top, bottom, cx, text_x, text_w = (0.13, 0.87, 0.70, 0.11, 0.36) if safe else (0.06, 0.94, 0.74, 0.09, 0.38)
+    main_w = min(0.24, (bottom - top) * H / W / 2.1)
+    side_w, spread = main_w * 0.82, main_w * 0.62
+    phones = [
+        dict(key="image2", yaw=24 if three_d else 0, pitch=-4 if three_d else 0, roll=-4 if three_d else 0, width=side_w,
+             mode="fit", cx=cx - spread),
+        dict(key="image3", yaw=-24 if three_d else 0, pitch=-4 if three_d else 0, roll=4 if three_d else 0, width=side_w,
+             mode="fit", cx=cx + spread),
+        dict(key="image", yaw=0, pitch=0, roll=0, width=main_w, mode="fit", cx=cx),
+    ]
+    region = (0, ch * top, cw, ch * bottom)
+    for p in phones:
+        shot = Image.open(cfg.get(p["key"]) or cfg["image"]).convert("RGB")
+        # ortadaki cihazın ışıması yandakilerin üstüne binip onları soluklaştırır
+        draw_phone(canvas, shot, dev, colors, p, region, persp=float(cfg.get("perspective", 3.0)),
+                   glow=None if p["key"] == "image" else cfg.get("glow"), rim=float(cfg.get("frame_rim", 0.008)))
+
+    x0, col = cw * text_x, cw * text_w
+    title, subtitle = pick_text(cfg.get("title"), locale), pick_text(cfg.get("subtitle"), locale)
+    tb = TextBlock(title, subtitle, col, ch, resolve_font(cfg.get("title_weight", "ExtraBold"), cfg.get("font")),
+                   resolve_font("Regular", cfg.get("font")), (*text_color, 255), accent, "left", 1.05, margin=0)
+    icon_h, icon_gap = 0, 0
+    if cfg.get("icon"):
+        icon_h, icon_gap = int(ch * 0.15), int(ch * 0.04)
+    y = (ch - (tb.height + icon_h + icon_gap)) / 2
+    if icon_h:
+        icon = ImageOps.fit(Image.open(cfg["icon"]).convert("RGB"), (icon_h, icon_h), Image.LANCZOS)
+        canvas.paste(icon, (int(x0), int(y)), rr_mask((icon_h, icon_h), (0, 0, icon_h, icon_h), icon_h * 0.225))
+        y += icon_h + icon_gap
+    tb.draw(canvas, y, dx=x0)
+    out = canvas.convert("RGB")
+    return out.resize((W, H), Image.LANCZOS) if ss != 1 else out
+
+
 def render_job(job: dict) -> str:
     """ProcessPool için üst düzey işlev. job: cfg, locale, idx, total, path, fmt"""
+    if job["cfg"].get("banner"):  # gren yok: düz degradeler PNG'de küçük kalır
+        path = Path(job["path"])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        render_banner(job["cfg"], job["locale"]).save(path)
+        return str(path)
     img = render_slide(job["cfg"], job["locale"], job["idx"], job["total"])
     path = Path(job["path"])
     path.parent.mkdir(parents=True, exist_ok=True)

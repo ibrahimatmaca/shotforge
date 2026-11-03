@@ -32,18 +32,18 @@ except ImportError:
     except ImportError as e:  # pragma: no cover
         raise SystemExit('The MCP server needs the "mcp" package:  pip install "shotforge[mcp]"') from e
 
-from . import cli, copywriter, palette as P
+from . import cli, copywriter, intake as I, palette as P
 from .engine import DEVICES, PREVIEW_SIZES
 
 mcp = _Server(
     "shotforge",
     instructions=(
-        "Creates App Store screenshots (one separate image file per page, per language) from the user's real app screenshots, "
-        "with 2D/3D device templates, headline text and colours. Workflow: (1) call analyze_screenshots with the screenshot "
-        "folder/files, (2) LOOK at the screenshots yourself, (3) ask the user for anything they want to fix (main background "
-        "colour, text colour, accent colour, number of pages, their own headline text, 2D or 3D) — everything not given is decided "
-        "by you or by shotforge's rules, (4) call create_screenshots with your design decisions and the slide copy, (5) show the "
-        "returned overview image and fix problems with render_screenshots. Output files are separate PNGs, never one combined image."
+        "Creates App Store and Google Play images (one separate file per page, per language) from the user's real app screenshots, "
+        "with 2D/3D device templates, headline text and colours. Workflow: (1) call get_intake_questions and ASK THE USER those "
+        "questions before generating anything; a blank or 'auto' answer means the returned default, (2) call analyze_screenshots "
+        "and LOOK at the screenshots yourself, (3) call create_screenshots with intake_completed=true, the answers and the slide "
+        "copy; everything left out is decided by shotforge's rules, background colour from the screenshots, (4) show the returned "
+        "overview image and fix problems with render_screenshots. Output goes under <out>/<lang>/<store>/<target>/, plus a zip."
     ),
 )
 
@@ -80,11 +80,15 @@ def _abs(p: str) -> Path:
     return Path(os.path.expanduser(p)).resolve()
 
 
-def _collect(shots: list[str]) -> dict[str, Path]:
+def _collect_sets(shots: list[str], langs=()) -> tuple[dict[str, Path], dict[str, dict[str, Path]]]:
     try:
-        return cli.collect_shots([str(_abs(s)) for s in shots])
+        return cli.scan_shots([str(_abs(s)) for s in shots], langs)
     except SystemExit as e:  # SystemExit -> clean tool error
         raise ValueError(str(e)) from None
+
+
+def _collect(shots: list[str]) -> dict[str, Path]:
+    return _collect_sets(shots)[0]
 
 
 class _Quiet(contextlib.AbstractContextManager):
@@ -137,6 +141,26 @@ def list_templates() -> list[dict]:
 
 @mcp.tool()
 @_safe
+def get_intake_questions(shots: list[str], app: str = "", about: str = "") -> dict:
+    """Call this FIRST. Returns the questions to ask the user before generating, with defaults computed from the screenshots.
+    Ask them in your host's question UI (several short groups if it limits questions per call), else in one message. Skip
+    anything the user already told you and questions whose `when` doesn't apply. A blank or 'auto' answer means the default.
+    Each question has at most 4 options; offer other values through free text. answer_field names the create_screenshots
+    argument when it differs from id. A default run renders many large images and can take a few minutes."""
+    sm, sets = _collect_sets(shots)
+    prof = P.analyze_shots(list(sm.values()))
+    cat = P.infer_category(f"{app} {about}")
+    name, dim, reasons = P.choose_template(cli.list_templates(), category=cat, profile=prof)
+    return dict(
+        questions=I.QUESTIONS, templates=_templates_info(), detected_shot_sets=sorted(sets),
+        screenshot_defaults=dict(colors=P.default_colors(prof), ui=prof["ui"], template=name, dimension=dim, reasons=reasons),
+        output_layout="<out>/<lang>/app-store/{iphone-6.9,ipad-13,header-search,previews}/… and <out>/<lang>/google-play/"
+                      "{phone,tablet-7,tablet-10,feature-graphic}/…, plus manifest.json and <app>.zip",
+    )
+
+
+@mcp.tool()
+@_safe
 def analyze_screenshots(shots: list[str], app: str = "", about: str = "", category: Optional[str] = None,
                         dimension: str = "auto", background_color: Optional[str] = None, tone: str = "") -> dict:
     """Analyse app screenshots locally (dominant brand colour, light/dark UI, visual density) and return shotforge's
@@ -165,12 +189,13 @@ def analyze_screenshots(shots: list[str], app: str = "", about: str = "", catego
 
 
 def _create(shots, app, slides, langs, template, dimension, background_color, text_color, accent_color, count, about,
-            category, tone, out_dir, device, layout, fmt, only, jobs, style):
-    sm = _collect(shots)
-    templates = cli.list_templates()
+            category, tone, out_dir, device, layout, fmt, only, jobs, style, *, targets=None, previews=None, icon=None, banner=None):
     langs = [l.strip() for l in langs if l.strip()] or ["en"]
     cli.check_langs(langs)
-    _valid_device(device, DEVICES)
+    sm, sets = _collect_sets(shots, langs)
+    templates = cli.list_templates()
+    if device:
+        _valid_device(device, DEVICES)
     colors ={k: v for k, v in (("background", _valid_hex(background_color, "background_color")),
                                 ("text", _valid_hex(text_color, "text_color")),
                                 ("accent", _valid_hex(accent_color, "accent_color"))) if v}
@@ -202,8 +227,14 @@ def _create(shots, app, slides, langs, template, dimension, background_color, te
     copy_path = out / "shotforge.copy.json"
     full = dict(app=app, about=about, tone=tone, langs=langs, generated_with="mcp", design=data["design"],
                 shots={k: cli.rel(p, copy_path.parent) for k, p in sm.items()}, slides=data["slides"])
+    if sets:
+        full["shots_by_set"] = {k: {n: cli.rel(p, copy_path.parent) for n, p in m.items()} for k, m in sets.items()}
+    if targets:
+        full["targets"] = targets
+    if banner:
+        full["banner"] = {k: banner[k] for k in ("title", "subtitle") if banner.get(k)}
     cli.write_copy(copy_path, full)
-    result = _render(copy_path, out, device, layout, fmt, only, jobs, style, langs)
+    result = _render(copy_path, out, device, layout, fmt, only, jobs, style, langs, previews=previews, icon=icon)
     result["design"] = data["design"]
     if placeholder:
         result["warning"] = ("Some slide text was missing and was filled with generic placeholder copy. "
@@ -213,7 +244,7 @@ def _create(shots, app, slides, langs, template, dimension, background_color, te
     return result
 
 
-def _render(copy_path: Path, out: Path, device, layout, fmt, only, jobs, style, langs=None, overrides=None):
+def _render(copy_path: Path, out: Path, device, layout, fmt, only, jobs, style, langs=None, overrides=None, previews=None, icon=None):
     import argparse as ap
     ov = overrides or {}
     a = ap.Namespace(
@@ -221,7 +252,7 @@ def _render(copy_path: Path, out: Path, device, layout, fmt, only, jobs, style, 
         frame=None, text_position=None, align=None, font=None, perspective=None, no_grain=False,
         only=",".join(map(str, only)) if only else None, sheet=False, brief=False, shots=[],
         template=ov.get("template"), bg_color=ov.get("background"), text_color=ov.get("text"), accent=ov.get("accent"),
-        langs=",".join(langs) if langs else None)
+        langs=",".join(langs) if langs else None, previews=previews, icon=str(_abs(icon)) if icon else None)
     with _Quiet():
         by_lang = cli.cmd_render(a)
     files = {l: sorted(ps) for l, ps in by_lang.items()}
@@ -233,6 +264,8 @@ def _render(copy_path: Path, out: Path, device, layout, fmt, only, jobs, style, 
     with _Quiet():
         cli.make_sheet(files[first], ov_path, h=640, gap=20)
     res = dict(files=files, overview=str(ov_path), note="Each file is a separate, upload-ready image (not combined).")
+    with _Quiet():
+        res.update(cli.package_output(a, by_lang))
     if a.warnings:
         res["render_warnings"] = a.warnings
     return res
@@ -254,30 +287,55 @@ async def create_screenshots(
     about: str = "",
     category: Optional[str] = None,
     tone: str = "confident, friendly, benefit-first",
-    out_dir: str = "~/shotforge-out",
-    device: str = "iphone-6.9",
-    layout: str = "flat",
+    out_dir: Optional[str] = None,
+    device: Optional[str] = None,
+    layout: Optional[str] = None,
     format: str = "png",
     only: Optional[list[int]] = None,
     jobs: int = 2,
     style: Optional[str] = None,
+    intake_completed: bool = False,
+    store: Optional[str] = None,
+    header_sizes: Optional[list[str]] = None,
+    devices: Optional[list[str]] = None,
+    previews: Optional[dict[str, str]] = None,
+    icon: Optional[str] = None,
+    banner: Optional[dict[str, Any]] = None,
+    output: Optional[str] = None,
 ) -> list:
-    """Create App Store screenshots: ONE SEPARATE IMAGE FILE per page per language (1320x2868 for iphone-6.9).
+    """Create store images: ONE SEPARATE IMAGE FILE per page per language, for every store target.
+
+    intake_completed: set true only after asking the user the get_intake_questions questions. Blank answers are fine.
+    store: appstore | playstore | both (default both). header_sizes: 5244x2950, 3840x2560, 1920x1280 or ["no"] (default all).
+    devices: from DEVICES (default iphone-6.9, android-phone). previews: {"*": path} or {"tr": path} screen recordings.
+    icon: app icon image for header/feature graphic. output: both | folder | zip (default both). A device argument draws
+    one device only, with no store folders, header or zip.
+    banner: {"title": {"en": "..."}, "subtitle": {"en": "..."}} for header/feature graphic (default: first slide text).
+    Output: <out_dir>/<lang>/<store>/<target>/…, default out_dir ~/shotforge-out/<app>.
 
     shots: absolute paths of the real app screenshots (files or a folder).
     slides: the page texts you (the host Claude) or the user decided, in order. Each item:
         {"shot": "01_home.png"  (file name, optional), "title": {"en": "Plan your *day*", "tr": "Gününü *planla*"},
          "subtitle": {"en": "...", "tr": "..."}}      (*word* = accent colour)
         Missing pages/languages are filled with generic placeholder copy and reported as a warning.
-    langs: e.g. ["en","tr"] (default ["en"]).
+    langs: e.g. ["en","tr"] (default ["en","tr"]).
     template/dimension: 'auto' lets shotforge's rules choose (2D = flat/in-plane phone, 3D = perspective phone). Use
         list_templates for names. background_color/text_color/accent_color: '#RRGGBB' (optional; text colour is auto-fixed if unreadable).
     count: number of pages 1-10 (defaults to len(slides), else 6-7).
-    layout: 'flat' (out/<lang>/NN_name.png) or 'asc' (out/<locale>/<DISPLAY_TYPE>/NN_name.png for App Store Connect uploaders).
+    layout: 'store' (default), 'flat' (out/<lang>/NN_name.png, one device) or 'asc' (out/<locale>/<DISPLAY_TYPE>/NN_name.png).
     only: render only these 1-based page numbers (faster iteration). Returns file paths and a small overview image."""
-    res = await asyncio.to_thread(_create, shots, app, slides, langs or ["en"], template, dimension, background_color,
+    if not intake_completed:
+        raise ToolError("Ask the user the get_intake_questions questions first, then call again with intake_completed=true. "
+                        "Blank answers are fine: they become defaults.")
+    targets = resolved_previews = None
+    resolved_langs = langs or list(I.DEFAULT_LANGS)
+    if not device:
+        r = I.resolve(dict(store=store, header_sizes=header_sizes, langs=resolved_langs, devices=devices, previews=previews, output=output))
+        targets, resolved_previews = r["targets"], r["previews"]
+    out_dir = out_dir or (f"~/shotforge-out/{I.slug(app)}" if not device else "~/shotforge-out")
+    res = await asyncio.to_thread(_create, shots, app, slides, resolved_langs, template, dimension, background_color,
                                   text_color, accent_color, count, about, category, tone, out_dir, device, layout,
-                                  format, only, jobs, style)
+                                  format, only, jobs, style, targets=targets, previews=resolved_previews, icon=icon, banner=banner)
     content: list = [json.dumps(res, ensure_ascii=False, indent=2)]
     if Path(res["overview"]).exists():
         content.append(Image(path=res["overview"]))
@@ -294,24 +352,26 @@ async def render_screenshots(
     background_color: Optional[str] = None,
     text_color: Optional[str] = None,
     accent_color: Optional[str] = None,
-    device: str = "iphone-6.9",
-    layout: str = "flat",
+    device: Optional[str] = None,
+    layout: Optional[str] = None,
     format: str = "png",
     jobs: int = 2,
+    icon: Optional[str] = None,
 ) -> list:
     """Re-render from a shotforge.copy.json (written by create_screenshots, editable by hand): use after fixing text or
     trying another template/colours. Overrides are optional. Returns file paths and a small overview image."""
     cp = _abs(copy_file)
     if not cp.exists():
         raise ValueError(f"copy file not found: {cp}")
-    _valid_device(device, DEVICES)
+    if device:
+        _valid_device(device, DEVICES)
     _builtin_template((cli.read_copy(cp).get("design") or {}).get("template", "classic"))
     if template:
         template = _builtin_template(template)
     out = _abs(out_dir) if out_dir else cp.parent
     ov = dict(template=template, background=_valid_hex(background_color, "background_color"),
               text=_valid_hex(text_color, "text_color"), accent=_valid_hex(accent_color, "accent_color"))
-    res = await asyncio.to_thread(_render, cp, out, device, layout, format, only, jobs, None, None, ov)
+    res = await asyncio.to_thread(_render, cp, out, device, layout, format, only, jobs, None, None, ov, None, icon)
     content: list = [json.dumps(res, ensure_ascii=False, indent=2)]
     if Path(res["overview"]).exists():
         content.append(Image(path=res["overview"]))
@@ -343,20 +403,19 @@ async def convert_app_preview(input_video: str, output_video: str, device: str =
     return f"Wrote {a.out}"
 
 
-@mcp.prompt(name="store_screenshots", description="Guided workflow: analyse screenshots, ask for design choices, create separate 2D/3D App Store images")
-def store_screenshots_prompt(folder: str, app: str, about: str = "") -> str:
+@mcp.prompt(name="store_screenshots", description="Guided workflow: ask the intake questions, then create separate store images per language")
+def store_screenshots_prompt(folder: str, app: str = "", about: str = "") -> str:
     return (
-        f"Create App Store screenshots for the app '{app}' ({about or 'infer from the screenshots'}) from the real screenshots in {folder}.\n"
-        "1. Call analyze_screenshots(shots=[folder], app, about).\n"
-        "2. Open and LOOK at every screenshot yourself.\n"
-        "3. In ONE message ask the user which of these they want to fix (answer 'auto' = you decide): main background colour (#hex), "
-        "text colour, accent colour, number of pages (1-10, auto = 6-7), 2D or 3D (or a template name), languages, and whether they "
-        "will write the headline text or you should.\n"
-        "4. Decide the rest (colours derived from the app's look; template per the returned rules; page copy in each language: benefit-first, "
-        "max 5 words, *accent* words, subtitle one line). Keep any text the user wrote exactly.\n"
-        "5. Call create_screenshots with your decisions. Show the returned overview image, check text overflow / wrong translation / "
-        "contrast / screenshot-headline mismatch, fix with render_screenshots (edit the copy file) and tell the user where the separate "
-        "image files are. Do not upload anything unless asked."
+        f"Create store images for the app '{app or 'ask the user'}' ({about or 'infer from the screenshots'}) from the real screenshots in {folder}.\n"
+        "1. Call get_intake_questions(shots=[folder], app, about) and ask the user those questions BEFORE generating anything. "
+        "Skip what is already known. Blank or 'auto' means the returned default.\n"
+        "2. Call analyze_screenshots and LOOK at every screenshot yourself.\n"
+        "3. Write page copy in each language unless the user wrote it: benefit-first, max 5 words, *accent* words, subtitle one line. "
+        "Keep any text the user wrote exactly. For Google Play avoid words like Best, #1, Free and calls like Download now.\n"
+        "4. Call create_screenshots with intake_completed=true and the answers. Leave colours out when the user left them blank: "
+        "shotforge derives them from the screenshots.\n"
+        "5. Show the returned overview image, check text overflow / wrong translation / contrast / screenshot-headline mismatch, "
+        "fix with render_screenshots (edit the copy file). Report the output folder, zip path and every warning. Do not upload anything unless asked."
     )
 
 

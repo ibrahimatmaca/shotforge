@@ -22,7 +22,9 @@ her dilde başlık metinlerini yazar. Bunların herhangi birini siz de belirleye
   vereceğiniz her şey aynen korunur, kalanı Claude (veya yerleşik kurallar) tamamlar.
 - **2D ve 3D olmak üzere 7 şablon.** 2D = telefon düz ya da yalnızca düzlem içinde döndürülmüş; 3D = perspektifli, kalınlığı görünen eğik telefon.
   Otomatik seçim belgelenmiş kurallara göredir (`shotforge rules`); verdiğiniz renkle teması çelişen şablon seçilmez.
-- Tek komutta **çok dilli** çıktı (`--langs en,tr,de`), App Store Connect klasör düzeni, **App Preview** video dönüştürücü.
+- **Başlamadan sorar.** Slash komutu, MCP araçları ve terminal aynı soru listesini kullanır; boş bırakılan alan varsayılan alır, renkler ekran görüntülerinizden gelir.
+- Tek çalıştırmada **App Store ve Google Play**: telefon ve tablet boyutları, App Store Header and Search Results görselleri, Play feature graphic.
+- Tek komutta **çok dilli** çıktı (`--langs en,tr,de`): her dile bir klasör ve zip, isteğe bağlı dile özel ekran görüntüleri, **App Preview** video dönüştürücü.
 - **Okunaklılık:** okunaksız yazı rengi slayt başına düzeltilir (başlıklar için kontrast ≥ 3:1) ve raporlanır.
 
 ## Kurulum
@@ -56,8 +58,52 @@ shotforge create ./ekranlar --app "Habita" --texts metinlerim.txt -o out
 shotforge create ./ekranlar --app "Habita" --ask
 ```
 
-Sonuç: `out/en/01_home.png … 07_….png` ve `out/tr/…` — ayrı dosyalar. `--sheet`, yan yana tek bir kontrol görseli yazar
-(`out/_review/overview_<dil>.jpg`; teslim dosyası değildir); `--brief`, aynı seti Claude Design'da yapmak için hazır bir istem yazar.
+Sonuç, her dil için ayrı dosyalar:
+
+```
+out/
+  en/
+    app-store/
+      iphone-6.9/01_home.png …
+      header-search/5244x2950.png, 3840x2560.png, 1920x1280.png
+      previews/iphone-6.9.mp4          # yalnızca --preview verilirse
+    google-play/
+      phone/01_home.png …
+      feature-graphic/1024x500.png
+  tr/ …
+  manifest.json                        # tüm dosyalar, boyutlar, kararlar ve uyarılar
+  habita.zip                           # en/, tr/, manifest.json
+  shotforge.copy.json, _review/        # zip'e girmez
+```
+
+`-o` verilmezse çıktı `./shotforge-out/<uygulama>/` altına yazılır. `--sheet`, yan yana tek bir kontrol görseli yazar
+(`_review/overview_<dil>.jpg`; teslim dosyası değildir); `--brief`, aynı seti Claude Design'da yapmak için hazır bir istem yazar.
+
+## Sorulan sorular ve varsayılanlar
+
+| Soru | Seçenek | Boş bırakılırsa |
+|---|---|---|
+| Mağaza | `--store appstore\|playstore\|both` | ikisi |
+| Header and Search Results görselleri (App Store) | `--header-sizes 5244x2950,3840x2560,1920x1280\|no` | üçü de |
+| Diller | `--langs en,tr,de` | en, tr |
+| 2D, 3D veya şablon | `--dimension`, `--template` | kurallar seçer |
+| Cihaz boyutları | `--devices iphone-6.9,ipad-13,android-phone,android-tablet-7,android-tablet-10` | iphone-6.9, android-phone |
+| Sayfa sayısı | `--count` | 6–7 |
+| Başlıklar ve ton | `--texts`, `--tone` | Claude yazar |
+| Arka plan, yazı, vurgu rengi | `--bg-color`, `--text-color`, `--accent` | ekran görüntülerinden; nötrlerse şablon varsayılanı |
+| Yatay görseller için uygulama ikonu | `--icon` | yok |
+| App Preview kaydı, ortak veya dil başına | `--preview kayit.mov`, `--preview tr=kayit_tr.mov` | atlanır |
+| Çıktı | `-o`, `--no-zip`, `--zip-only` | `./shotforge-out/<uygulama>/` ve zip |
+
+`--no-ask` soruları atlar ve bu varsayılanları kullanır. `--device` verilirse yalnızca o cihaz eski `out/<dil>/` düzeniyle çizilir; mağaza klasörü ve zip olmaz.
+
+**Dile veya platforma göre ayrı ekran görüntüleri:** aynı dosya adlarıyla `<klasör>/tr/`, `<klasör>/android/`, `<klasör>/android/tr/`, `<klasör>/ipad/` veya `<klasör>/android-tablet/` altına koyun. Örneğin Türkçe sayfada İngilizce arayüz kullanılmak zorunda kalırsa shotforge uyarır.
+
+**Mağaza notları:**
+- Google Play cihaz türü başına en fazla 8 görsel, tablet için en az 4 görsel ister; fazla sayfalar uyarıyla çıkarılır.
+- Google'ın yönergesi cihaz görseli, görselin %20'sini aşan slogan ve "Best", "Free" gibi sözleri önermez. Bu, telefon ve tablet için zorunlu kural değil, ama öne çıkarılmayı etkileyebilir; bu yüzden her Play çalıştırmasında uyarı verilir.
+- Üçüncü taraf rehberlere göre 5244x2950 hem App Store başlığında hem aramada çalışır (yalnızca PNG), 3:2 boyutlar yalnızca aramada çalışır. Kırpmayı App Store Connect önizlemesinde kontrol edin; shotforge metni ortaya yakın tutar.
+- App Preview için ffmpeg gerekir ve yalnızca App Store içindir; Google Play YouTube bağlantısı alır.
 
 ## Kim neye karar verir?
 
@@ -142,12 +188,12 @@ Araçlar: `analyze_screenshots`, `list_templates`, `create_screenshots` (ayrı g
 shotforge install-claude --global      # ~/.claude/commands/store-shots.md
 ```
 
-`/store-shots ./ekranlar "Habita" "alışkanlık takibi"`: tasarım sorularını tek mesajda sorar, `shotforge create`'i çalıştırır, önizlemeleri açıp sorunları düzeltir.
+`/store-shots ./ekranlar "Habita" "alışkanlık takibi"`: yukarıdaki soruları başlamadan sorar, `shotforge create`'i çalıştırır, önizlemeleri açıp sorunları düzeltir.
 
 ## App Store Connect
 
 ```bash
-shotforge create ./ekranlar --app Habita --layout asc -o media
+shotforge create ./ekranlar --app Habita --store appstore --header-sizes no --layout asc -o media
 # media/en-US/APP_IPHONE_67/01_home.png, media/tr/APP_IPHONE_67/…   (klasör tabanlı yükleyicilerle:  asc apps media upload … --folder media/)
 shotforge preview kayit.mov -o preview.mp4      # 886x1920, 30 fps, H.264/AAC, ≤ 30 sn (ffmpeg gerekir)
 ```
@@ -162,7 +208,7 @@ Kullanım *sizin* planınızdan/API faturanızdan düşer. Claude'un çıktısı
 
 ## Durum ve bilinen sınırlar
 
-Beta (v0.3). CI, testleri Linux ve macOS'ta Python 3.10–3.13 ile çalıştırır.
+Beta (v0.4). CI, testleri Linux ve macOS'ta Python 3.10–3.13 ile çalıştırır.
 
 - `claude -p` yolu, Claude Code'un JSON zarfını taklit eden sahte bir `claude` ile test edilir; gerçek kurulumunuzda farklı bir şey görürseniz lütfen bildirin.
   MCP sunucusu resmi MCP istemcisiyle `mcp` 1.30 ve 2.3 üzerinde denendi.
@@ -170,7 +216,8 @@ Beta (v0.3). CI, testleri Linux ve macOS'ta Python 3.10–3.13 ile çalıştır�
 - Linux/macOS test edilir; Windows denenmedi.
 - Çerçeve genel bir modern telefon çizimidir (Apple'ın resmi bezel'i değil). Görsel başına ~5–6 sn.
 - Başlık ≤ 3, alt başlık ≤ 2 satır; uzun metin otomatik küçülür. Ekran analizi basit bir sezgidir (ipucu, hüküm değil).
-- iPad çıktısında telefon ekranı verirseniz iPad oranına kırpılır; gerçek iPad ekranı verin.
+- Tablet çıktısında telefon ekranı verirseniz tablet oranına kırpılır; gerçek tablet ekranı verin. `android/` vermezseniz Android çıktısı iOS ekranlarını kullanır.
+- Arapça ve İbranice sağdan sola dizilmez. App Store'un yalnızca başlıkta kullanılan 3840x1646 boyutu üretilmez.
 
 ## Geliştirme
 

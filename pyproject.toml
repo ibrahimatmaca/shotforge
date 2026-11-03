@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "shotforge"
-version = "0.3.0"
-description = "App Store screenshot generator CLI + MCP server: Claude decides colours, 2D/3D template and EN/TR copy; separate store-ready images per page."
+version = "0.4.0"
+description = "App Store and Google Play image generator CLI + MCP server: asks first, then Claude decides colours, 2D/3D template and copy; separate store-ready images per page and language, plus a zip."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"

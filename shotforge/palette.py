@@ -205,6 +205,22 @@ def _tokens(pal, accent, text) -> dict[str, str]:
 # --------------------------------------------------------------------------- #
 # Ekran görüntüsü analizi
 # --------------------------------------------------------------------------- #
+def _clusters(img) -> list[tuple]:
+    q = img.quantize(colors=10, method=Image.MEDIANCUT)
+    pal_flat = q.getpalette()[:30]
+    total = sum(c for c, _ in q.getcolors())
+    out = []
+    for count, idx in q.getcolors():
+        rgb = tuple(float(v) for v in pal_flat[idx * 3: idx * 3 + 3])
+        h, l, s = to_hls(rgb)
+        out.append((count / total, rgb, l, s))
+    return sorted(out, key=lambda c: -c[0])
+
+
+def _brand_candidates(clusters) -> list[tuple]:
+    return [c for c in clusters if c[3] > 0.35 and 0.2 < c[2] < 0.8 and c[0] > 0.012]
+
+
 def analyze_shots(paths) -> dict:
     thumbs, grads, lums = [], [], []
     for p in paths:
@@ -219,16 +235,10 @@ def analyze_shots(paths) -> dict:
     big = Image.new("RGB", (64 * len(thumbs), 64))
     for i, t in enumerate(thumbs):
         big.paste(t, (i * 64, 0))
-    q = big.quantize(colors=10, method=Image.MEDIANCUT)
-    pal_flat = q.getpalette()[:30]
-    total = sum(c for c, _ in q.getcolors())
-    clusters = []
-    for count, idx in q.getcolors():
-        rgb = tuple(float(v) for v in pal_flat[idx * 3: idx * 3 + 3])
-        h, l, s = to_hls(rgb)
-        clusters.append((count / total, rgb, l, s))
-    clusters.sort(key=lambda c: -c[0])
-    cand = [c for c in clusters if c[3] > 0.35 and 0.2 < c[2] < 0.8 and c[0] > 0.012]
+    clusters = _clusters(big)
+    cand = _brand_candidates(clusters)
+    if not cand:  # farklı renkli ekranlar birlikte nicelenince griye ortalanır; tek tek bak
+        cand = [c for t in thumbs for c in _brand_candidates(_clusters(t))]
     brand = rgb2hex(max(cand, key=lambda c: c[0] * c[3])[1]) if cand else None
     gs = float(np.mean(grads))
     return dict(
@@ -285,6 +295,16 @@ def infer_category(text: str) -> str | None:
         if sc > score:
             best, score = cat, sc
     return best
+
+
+def default_colors(profile: dict | None, chosen_theme: str | None = None) -> dict:
+    """Kullanıcı ve Claude renk vermediyse ekran görüntülerinden türetilen renkler.
+    chosen_theme: kullanıcının açıkça seçtiği şablonun teması. Koyu bir şablonu seçtiyse koyu arka planı kalır, marka rengi
+    yalnızca vurgu olur. Renk nötrse şablon varsayılanı kalır."""
+    brand = (profile or {}).get("brand")
+    if not brand:
+        return {}
+    return {"accent": brand} if chosen_theme == "dark" else {"background": brand}
 
 
 def desired_theme(bg_hex: str | None, profile: dict | None) -> str:
