@@ -24,7 +24,9 @@ one combined image.
   (full or partial), 2D/3D, or a template. Everything you give is kept verbatim; Claude (or the built-in rules) fills the rest.
 - **7 templates, 2D and 3D.** 2D = phone flat or rotated only in the plane; 3D = phone tilted in perspective with visible thickness.
   Automatic selection follows documented rules (`shotforge rules`) and never picks a template whose theme clashes with your colour.
-- **Multi-language in one run** (`--langs en,tr,de`), App Store Connect-ready folder layout, **App Preview** video converter.
+- **Asks before it starts.** The slash command, MCP tools and terminal share one question list; anything left blank gets a default, with colours taken from your screenshots.
+- **App Store and Google Play** from one run: phone and tablet sizes, App Store Header and Search Results images, and the Play feature graphic.
+- **Multi-language in one run** (`--langs en,tr,de`): one folder per language plus a zip, optional per-language screenshots, **App Preview** video converter.
 - **Readable by construction:** unreadable text colours are corrected per slide (contrast ≥ 3:1 for headlines) and reported.
 
 ## Install
@@ -58,8 +60,52 @@ shotforge create ./screens --app "Habita" --texts my-texts.txt -o out
 shotforge create ./screens --app "Habita" --ask
 ```
 
-Result: `out/en/01_home.png … 07_….png` and `out/tr/…` — separate files. Add `--sheet` for a single side-by-side
-`out/_review/overview_<lang>.jpg` (a review aid, not a deliverable) and `--brief` for a copy-paste prompt to recreate the set in Claude Design.
+Result, as separate files per language:
+
+```
+out/
+  en/
+    app-store/
+      iphone-6.9/01_home.png …
+      header-search/5244x2950.png, 3840x2560.png, 1920x1280.png
+      previews/iphone-6.9.mp4          # only if you pass --preview
+    google-play/
+      phone/01_home.png …
+      feature-graphic/1024x500.png
+  tr/ …
+  manifest.json                        # every file, its size, the decisions and warnings
+  habita.zip                           # en/, tr/, manifest.json
+  shotforge.copy.json, _review/        # not in the zip
+```
+
+Without `-o`, output goes to `./shotforge-out/<app>/`. Add `--sheet` for a single side-by-side `_review/overview_<lang>.jpg`
+(a review aid, not a deliverable) and `--brief` for a copy-paste prompt to recreate the set in Claude Design.
+
+## What it asks, and the defaults
+
+| Question | Flag | If left blank |
+|---|---|---|
+| Store | `--store appstore\|playstore\|both` | both |
+| Header and Search Results images (App Store) | `--header-sizes 5244x2950,3840x2560,1920x1280\|no` | all three |
+| Languages | `--langs en,tr,de` | en, tr |
+| 2D, 3D or a template | `--dimension`, `--template` | chosen by the rules |
+| Device sizes | `--devices iphone-6.9,ipad-13,android-phone,android-tablet-7,android-tablet-10` | iphone-6.9, android-phone |
+| Pages | `--count` | 6–7 |
+| Headlines and tone | `--texts`, `--tone` | written by Claude |
+| Background, text, accent colour | `--bg-color`, `--text-color`, `--accent` | from the screenshots; template default if they are neutral |
+| App icon for the wide images | `--icon` | none |
+| App Preview recording, shared or per language | `--preview rec.mov`, `--preview tr=rec_tr.mov` | skipped |
+| Output | `-o`, `--no-zip`, `--zip-only` | `./shotforge-out/<app>/` and a zip |
+
+`--no-ask` skips the questions and uses these defaults. Passing `--device` draws that one device with the old `out/<lang>/` layout, no store folders or zip.
+
+**Separate screenshots per language or platform:** put them in `<folder>/tr/`, `<folder>/android/`, `<folder>/android/tr/`, `<folder>/ipad/` or `<folder>/android-tablet/`, with the same file names. shotforge warns when it has to fall back, for example to an English UI on a Turkish page.
+
+**Store notes:**
+- Google Play takes up to 8 images per device type and at least 4 for tablets; extra pages are dropped with a warning.
+- Google's guidance recommends against device imagery, taglines over 20% of the image, and words like "Best" or "Free". It is a recommendation, not a requirement for phones and tablets, but it can affect where the listing is featured, so shotforge warns on every Play run.
+- Per third-party guides, 5244x2950 works for both the App Store header and search results (PNG only), while 3:2 sizes work for search results only. Check the crop in App Store Connect's preview; shotforge keeps text near the centre.
+- App Preview needs ffmpeg and is App Store only; Google Play takes a YouTube link.
 
 ## Who decides what
 
@@ -157,13 +203,13 @@ Output goes to `~/shotforge-out` by default.
 shotforge install-claude --global      # writes ~/.claude/commands/store-shots.md
 ```
 
-`/store-shots ./screens "Habita" "habit tracker"` asks you the design questions in one message, runs `shotforge create`, opens
+`/store-shots ./screens "Habita" "habit tracker"` asks you the questions above before starting, runs `shotforge create`, opens
 the overview images and fixes problems it finds.
 
 ## App Store Connect
 
 ```bash
-shotforge create ./screens --app Habita --layout asc -o media
+shotforge create ./screens --app Habita --store appstore --header-sizes no --layout asc -o media
 # media/en-US/APP_IPHONE_67/01_home.png, media/tr/APP_IPHONE_67/…  — works with folder-based uploaders such as
 #   asc apps media upload com.example.MyApp --folder media/ --replace      (keremerkan/asc-cli)
 shotforge preview recording.mov -o preview.mp4      # 886x1920, 30 fps, H.264/AAC, ≤ 30 s (needs ffmpeg)
@@ -188,7 +234,7 @@ shotforge itself has no server and no telemetry. Usage counts against *your* pla
 
 ## Status and known limitations
 
-Beta (v0.3). CI runs the test-suite on Linux and macOS, Python 3.10–3.13.
+Beta (v0.4). CI runs the test-suite on Linux and macOS, Python 3.10–3.13.
 
 - The `claude -p` path is covered by tests against a fake `claude` executable that mimics Claude Code's JSON envelope; please report
   anything that differs with your real installation. The MCP server was exercised with the official MCP client on `mcp` 1.30 and 2.3.
@@ -197,7 +243,8 @@ Beta (v0.3). CI runs the test-suite on Linux and macOS, Python 3.10–3.13.
 - Linux/macOS are tested; Windows is untested.
 - Device frames are generic modern-phone drawings, not Apple's official bezels. ~5–6 s per image.
 - Headlines: ≤ 3 lines, subtitles ≤ 2 lines; long text shrinks automatically, and text that still overflows is reported. The bundled Inter font has no Japanese, Korean or Arabic glyphs: shotforge warns, and `--font` selects another font (Arabic also needs Pillow with raqm). Screenshot analysis is a simple heuristic (a hint, not a verdict).
-- Tablet output crops a phone screenshot to the iPad ratio; supply real iPad screens.
+- Tablet output crops a phone screenshot to the tablet ratio; supply real tablet screens. Android output reuses iOS screens unless you supply `android/`.
+- Arabic and Hebrew are not laid out right to left. The App Store header-only 3840x1646 size is not generated.
 
 ## Development
 

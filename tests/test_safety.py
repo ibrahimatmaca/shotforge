@@ -119,3 +119,44 @@ def test_mcp_rejects_unsafe_arguments(shots_dir, tmp_path):
     with pytest.raises(S.ToolError, match="device"):
         asyncio.run(S.convert_app_preview("in.mov", str(tmp_path / "o.mp4"), device="iphone-6.9b"))
     assert existing.read_bytes() == b"keep"
+
+
+def _copy_with(tmp_path, shots_dir, **extra):
+    copy = tmp_path / "c.json"
+    main(["plan", str(shots_dir), "--app", "D", "--ai", "offline", "--no-ask", "--copy", str(copy), "--count", "1", "--langs", "en"])
+    d = json.loads(copy.read_text(encoding="utf-8"))
+    d.update(extra)
+    copy.write_text(json.dumps(d), encoding="utf-8")
+    return copy
+
+
+@pytest.mark.parametrize("targets", [{"devices": ["../../evil"]}, {"banners": ["../x"]}, {"output": "rm"}, {"devices": "iphone-6.9"}])
+def test_copy_file_targets_are_allowlisted(tmp_path, shots_dir, targets):
+    copy = _copy_with(tmp_path, shots_dir, targets=targets)
+    with pytest.raises(SystemExit):
+        main(["render", "--copy", str(copy), "--jobs", "1", "-o", str(tmp_path / "o")])
+
+
+def test_copy_file_cannot_set_icon_or_font_through_banner(tmp_path, shots_dir):
+    data = dict(app="D", banner={"title": {"en": 5}, "subtitle": ["x"], "icon": "/etc/passwd", "font": "/etc/hosts"})
+    title, subtitle = cli.banner_text(data, {"title": {"en": "T"}})
+    assert title == {"en": "T"} and subtitle == "D"
+
+
+def test_bad_shot_set_key_is_ignored(tmp_path, shots_dir, capsys):
+    copy = _copy_with(tmp_path, shots_dir, shots_by_set={"../../x/": {"01_home.png": "01_home.png"}})
+    main(["render", "--copy", str(copy), "--jobs", "1", "--only", "1", "-o", str(tmp_path / "o")])
+    assert "tanınmayan shots_by_set" in capsys.readouterr().err
+
+
+def test_icon_must_be_an_image(tmp_path, shots_dir):
+    copy = _copy_with(tmp_path, shots_dir)
+    with pytest.raises(SystemExit, match="İkon"):
+        main(["render", "--copy", str(copy), "--jobs", "1", "--icon", "/etc/hosts", "-o", str(tmp_path / "o")])
+
+
+def test_mcp_tool_rejects_bad_store_cleanly(shots_dir, tmp_path):
+    pytest.importorskip("mcp")
+    from shotforge import mcp_server as S
+    with pytest.raises(S.ToolError):
+        asyncio.run(S.create_screenshots([str(shots_dir)], "D", intake_completed=True, store="windows", out_dir=str(tmp_path)))

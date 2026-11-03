@@ -37,3 +37,31 @@ def test_bad_inputs_are_clean_errors(shots_dir, tmp_path):
     with pytest.raises(ValueError):
         S._create([str(shots_dir)], "Demo", [], ["en"], "nope", "auto", None, None, None, None, "", None, "",
                   str(tmp_path / "o"), "iphone-6.9", "flat", "png", None, 1, None)
+
+
+def test_intake_questions_tool(shots_dir):
+    r = S.get_intake_questions([str(shots_dir)], app="Demo")
+    assert {"store", "header_sizes", "langs", "dimension"} <= {q["id"] for q in r["questions"]}
+    assert r["screenshot_defaults"]["template"] in {t["name"] for t in r["templates"]}
+
+
+def test_create_refuses_until_intake_is_done(shots_dir):
+    with pytest.raises(S.ToolError, match="intake"):
+        asyncio.run(S.create_screenshots([str(shots_dir)], "Demo"))
+
+
+def test_create_with_blank_intake_uses_store_defaults(shots_dir, tmp_path):
+    res = asyncio.run(S.create_screenshots(
+        [str(shots_dir)], "Demo", intake_completed=True, count=1, jobs=2, out_dir=str(tmp_path / "o"), store="playstore",
+        banner={"title": {"en": "Hello *there*", "tr": "Merhaba"}}))
+    data = json.loads(res[0])
+    assert set(data["files"]) == {"en", "tr"} and Path(data["zip"]).name == "demo.zip"
+    assert any("google-play/feature-graphic/1024x500.png" in f for f in data["files"]["en"])
+    assert any("Google Play" in w for w in data["render_warnings"])
+
+
+def test_render_keeps_targets_from_copy_file(shots_dir, tmp_path):
+    asyncio.run(S.create_screenshots([str(shots_dir)], "Demo", intake_completed=True, count=1, langs=["en"], jobs=1,
+                                     out_dir=str(tmp_path / "o"), store="playstore"))
+    res = asyncio.run(S.render_screenshots(str(tmp_path / "o" / "shotforge.copy.json"), jobs=1))
+    assert any("google-play/phone" in f for f in json.loads(res[0])["files"]["en"])

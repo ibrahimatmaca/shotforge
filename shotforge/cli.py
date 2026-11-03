@@ -4,14 +4,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import zipfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
-from . import copywriter, palette as P, texts as T
-from .engine import BG_PRESETS, DEVICES, FRAMES, PREVIEW_SIZES, STYLES, render_job, text_problems
+from . import copywriter, intake as I, palette as P, texts as T
+from .engine import BANNERS, BG_PRESETS, DEVICES, FRAMES, PREVIEW_SIZES, STYLES, render_job, text_problems
 
 HERE = Path(__file__).resolve().parent
 IMG_EXT = {".png", ".jpg", ".jpeg", ".webp"}
@@ -20,6 +22,10 @@ SLIDE_OVERRIDES = {"style", "frame", "text_position", "align", "bg_angle", "titl
                    "no_grain", "no_glow", "text_color", "accent", "glow", "deco", "frame_rim"}
 ASC_LOCALES = {"en": "en-US", "tr": "tr", "de": "de-DE", "fr": "fr-FR", "es": "es-ES", "it": "it", "pt": "pt-BR",
                "ja": "ja", "ko": "ko", "ru": "ru", "nl": "nl-NL", "ar": "ar-SA"}
+SHOT_PLATFORMS = ("ios", "ipad", "android", "android-tablet")
+# shots_by_set anahtarı: "<platform>/<dil>", ikisinden biri boş olabilir ("android/", "/tr")
+SET_KEY_RE = re.compile(r"(ios|ipad|android|android-tablet)?/([a-z]{2,3}(-[A-Za-z]{2,4})?)?")
+VIDEO_EXT = {".mp4", ".mov", ".m4v"}
 
 
 # --------------------------------------------------------------------------- #
@@ -70,6 +76,62 @@ def collect_shots(inputs) -> dict[str, Path]:
         if f.name in out:
             raise SystemExit(f"Aynı ada sahip iki dosya var: {f.name}")
         out[f.name] = f
+    return out
+
+
+def _images(d: Path) -> list[Path]:
+    return sorted(q for q in d.iterdir() if q.is_file() and q.suffix.lower() in IMG_EXT)
+
+
+def scan_shots(inputs, langs=()) -> tuple[dict[str, Path], dict[str, dict[str, Path]]]:
+    """Temel ekran görüntüsü seti + dile/platforma göre ayrılmış setler (<klasör>/tr, <klasör>/android/tr …)."""
+    root = Path(inputs[0]) if len(inputs) == 1 else None
+    if root is None or not root.is_dir():
+        return collect_shots(inputs), {}
+    known = {*ASC_LOCALES, *langs}  # 'old', 'out' gibi klasörler dil sanılmasın
+    sets: dict[str, list[Path]] = {}
+    for d in sorted(q for q in root.iterdir() if q.is_dir()):
+        if d.name in SHOT_PLATFORMS:
+            sets[f"{d.name}/"] = _images(d)
+            for sub in sorted(q for q in d.iterdir() if q.is_dir() and q.name in known):
+                sets[f"{d.name}/{sub.name}"] = _images(sub)
+        elif d.name in known:
+            sets[f"/{d.name}"] = _images(d)
+    sets = {k: v for k, v in sets.items() if v}
+    if _images(root):
+        base = collect_shots(inputs)
+    else:
+        order = [*(f"/{l}" for l in langs), *sorted(k for k in sets if k.startswith("/")), "ios/", *sorted(sets)]
+        first = next((k for k in order if k in sets), None)
+        if first is None:
+            return collect_shots(inputs), {}  # anlaşılır hata verir
+        base = {f.name: f for f in sets[first]}
+    return base, {k: {f.name: f for f in v} for k, v in sets.items()}
+
+
+def _shot_platforms(device: str) -> tuple[str, ...]:
+    if device.startswith("android-tablet"):
+        return ("android-tablet", "android")
+    if device.startswith("android"):
+        return ("android",)
+    return ("ipad", "ios") if device.startswith("ipad") else ("ios",)
+
+
+def shots_for(device: str, lang: str, base: dict[str, Path], sets: dict[str, dict[str, Path]], notes: list[str]) -> dict[str, Path]:
+    """Her slayt görseli için en uygun set: platform+dil → platform → dil → temel."""
+    chain = [k for p in _shot_platforms(device) for k in (f"{p}/{lang}", f"{p}/")] + [f"/{lang}"]
+    out, used = {}, set()
+    for name, path in base.items():
+        key = next((k for k in chain if name in sets.get(k, {})), None)
+        out[name] = sets[key][name] if key else path
+        if key:
+            used.add(key)
+    if device.startswith("android") and not any(k.startswith("android") for k in used):
+        notes.append(f"{device}: Android ekran görüntüsü yok, iOS görüntüleri kullanıldı (durum çubuğu Android'e benzemez).")
+    if DEVICES[device]["kind"] == "tablet" and not any(k.startswith(("ipad/", "android-tablet/")) for k in used):
+        notes.append(f"{device}: tablet ekran görüntüsü yok, telefon görüntüleri tablet ekranına kırpılarak yerleştirildi.")
+    if any(k.split("/")[1] for k in sets) and not any(k.endswith(f"/{lang}") for k in used):
+        notes.append(f"[{lang}] için ayrı ekran görüntüsü yok; başka bir dilin arayüzü gösteriliyor.")
     return out
 
 
@@ -126,6 +188,60 @@ def _ask_color(label: str, suggestion: str | None = None) -> str | None:
         print("  Geçersiz renk; örnek: #6D28D9")
     print("  Otomatik seçilecek.")
     return None
+
+
+def _ask_valid(q: dict, parse):
+    """Soruyu sorar; geçersiz cevapta bir kez daha sorar, yine olmazsa varsayılana düşer."""
+    opts = f" [{', '.join(q['options'])}]" if q.get("options") else ""
+    if q.get("note"):
+        print(f"  ({q['note']})")
+    for _ in range(2):
+        v = _ask(f"{q['question']}{opts} (Enter = {q.get('default', 'otomatik')}): ")
+        try:
+            parse(v)
+            return v
+        except ValueError as e:
+            print(f"  Geçersiz: {e}")
+    print("  Varsayılan kullanılacak.")
+    return ""
+
+
+def ask_store_questions(a, answers: dict) -> dict:
+    """Mağaza, boyut, dil ve çıktı soruları. Tasarım soruları sonra run_interactive içinde sorulur."""
+    qs = {q["id"]: q for q in I.QUESTIONS}
+    print("\n── Mağaza ve çıktı soruları ─────────────────────────────────────")
+    print("Her soruda Enter = varsayılan.\n")
+    if not a.app:
+        a.app = _ask(qs["app"]["question"] + " ") or None
+    if not answers.get("store"):
+        answers["store"] = _ask_valid(qs["store"], I.parse_stores)
+    stores = I.parse_stores(answers["store"])
+    if "appstore" in stores and not answers.get("header_sizes"):
+        answers["header_sizes"] = _ask_valid(qs["header_sizes"], I.parse_header_sizes)
+    if not answers.get("langs"):
+        def langs_ok(v):
+            try:
+                check_langs(I.parse_langs(v))
+            except SystemExit as e:
+                raise ValueError(str(e)) from None
+        answers["langs"] = _ask_valid(qs["langs"], langs_ok)
+    if not answers.get("devices"):
+        picked = [_ask_valid(qs[k], lambda v: I.parse_devices(v, stores))
+                  for k, st in (("appstore_devices", "appstore"), ("play_devices", "playstore")) if st in stores]
+        answers["devices"] = ",".join(p for p in picked if p and not I.is_blank(p))
+    if "appstore" in stores and not answers.get("previews"):
+        answers["previews"] = _ask_valid(qs["previews"], I.parse_previews)
+    if not a.icon:
+        a.icon = _ask(f"{qs['icon']['question']} (Enter = {qs['icon']['default']}): ") or None
+    if not a.out:
+        a.out = _ask(f"{qs['out']['question']} (Enter = {qs['out']['default']}): ") or None
+    if not answers.get("output"):
+        answers["output"] = _ask_valid(qs["output"], I.parse_output)
+    return answers
+
+
+def should_ask(a) -> bool:
+    return True if a.ask else (False if (a.no_ask or a.yes) else sys.stdin.isatty())
 
 
 def run_interactive(inp: dict, shots: dict[str, Path], profile: dict, templates: dict, langs: list[str]):
@@ -211,8 +327,7 @@ def gather_inputs(a, shots: dict[str, Path], langs: list[str], templates: dict, 
             raise SystemExit(f"Geçersiz renk ({k}): {v}  (örnek: #6D28D9)")
     if inp["template"] and inp["template"] not in templates and not Path(inp["template"]).exists():
         raise SystemExit(f"Şablon yok: {inp['template']}. Mevcut: {', '.join(templates)}")
-    ask = True if a.ask else (False if (a.no_ask or a.yes) else sys.stdin.isatty())
-    if ask:
+    if should_ask(a):
         run_interactive(inp, shots, profile, templates, langs)
     if not inp["app"]:
         raise SystemExit("Uygulama adı gerekli: --app \"Ad\" (ya da etkileşimli modda sorulur).")
@@ -230,9 +345,9 @@ def gather_inputs(a, shots: dict[str, Path], langs: list[str], templates: dict, 
 
 
 def cmd_plan(a, quiet=False) -> dict:
-    shots = collect_shots(a.shots)
     langs = [l.strip() for l in a.langs.split(",") if l.strip()]
     check_langs(langs)
+    shots, sets = scan_shots(a.shots, langs)
     copy_path = Path(a.copy)
     if copy_path.exists() and not a.regen:
         if not quiet:
@@ -262,10 +377,12 @@ def cmd_plan(a, quiet=False) -> dict:
     d = data["design"]
     out = dict(app=inp["app"], about=inp["about"], tone=a.tone, langs=langs, generated_with=used,
                design=d, shots={n: rel(p, copy_path.parent) for n, p in shots.items()}, slides=data["slides"])
+    if sets:
+        out["shots_by_set"] = {k: {n: rel(p, copy_path.parent) for n, p in m.items()} for k, m in sets.items()}
     write_copy(copy_path, out)
     print_design(d)
     print(f"Yazıldı: {copy_path}  (düzenleyip `shotforge render` ile yeniden çizebilirsiniz)")
-    if (True if a.ask else (False if (a.no_ask or a.yes) else sys.stdin.isatty())):
+    if should_ask(a):
         if _ask("Bu tasarımla devam edilsin mi? [E/h]: ", "e").lower().startswith("h"):
             raise SystemExit(f"Durduruldu. {copy_path} dosyasını düzenleyip `shotforge render` çalıştırabilirsiniz.")
     return out
@@ -278,6 +395,8 @@ def print_design(d: dict):
     print(f"  kategori   : {d.get('category') or '?'}")
     print(f"  sayfa      : {d['count']}")
     print(f"  arka plan  : {c.get('background') or '(şablon varsayılanı)'}   yazı: {c.get('text') or '(otomatik)'}   vurgu: {c.get('accent') or '(otomatik)'}")
+    if d.get("colors_source"):
+        print(f"  renk kaynağı: {d['colors_source']}")
 
 
 # --------------------------------------------------------------------------- #
@@ -327,7 +446,8 @@ def slide_cfg(a, tpl, pal, idx, slide, shot_paths, names, warnings) -> dict:
 
 def cmd_render(a, data: dict | None = None):
     copy_path = Path(a.copy)
-    if data is None:
+    from_file = data is None
+    if from_file:
         if not copy_path.exists():
             raise SystemExit(f"Tasarım/metin dosyası yok: {copy_path}. Önce `shotforge plan` veya `shotforge create` çalıştırın.")
         data = read_copy(copy_path)
@@ -346,42 +466,92 @@ def cmd_render(a, data: dict | None = None):
     check_langs(langs)
     shot_paths = {n: (copy_path.parent / p) for n, p in data["shots"].items()}
     base = copy_path.parent.resolve()
-    outside = [n for n, p in shot_paths.items() if not p.resolve().is_relative_to(base)]
-    if outside:
+    sets: dict[str, dict[str, Path]] = {}
+    for key, m in (data.get("shots_by_set") or {}).items():
+        if not SET_KEY_RE.fullmatch(key):
+            print(f"UYARI: {copy_path}: tanınmayan shots_by_set anahtarı yok sayıldı: {key!r}", file=sys.stderr)
+            continue
+        sets[key] = {n: copy_path.parent / p for n, p in m.items() if (copy_path.parent / p).exists()}
+    all_paths = [*shot_paths.items(), *(i for m in sets.values() for i in m.items())]
+    outside = sorted({n for n, p in all_paths if not p.resolve().is_relative_to(base)})
+    if outside and from_file:  # create az önce kendi yazdı; uyarı dışarıdan gelen copy dosyaları için
         print(f"UYARI: {copy_path} kendi klasörü dışındaki görselleri kullanıyor: {', '.join(outside)}", file=sys.stderr)
     if getattr(a, "shots", None):
-        shot_paths.update(collect_shots(a.shots))
+        shot_paths.update(scan_shots(a.shots, langs)[0])
     for p in shot_paths.values():
         if not Path(p).exists():
             raise SystemExit(f"Ekran görüntüsü bulunamadı: {p}")
+    icon = getattr(a, "icon", None)
+    if icon:
+        icon = os.path.expanduser(str(icon))
+        if Path(icon).suffix.lower() not in IMG_EXT or not Path(icon).is_file():
+            raise SystemExit(f"İkon bir görsel dosyası olmalı: {icon}")
+    try:
+        targets = I.check_targets(data["targets"]) if data.get("targets") else None
+    except ValueError as e:
+        raise SystemExit(f"{copy_path}: {e}")
+    device = getattr(a, "device", None)
+    devices = [device] if device else (targets["devices"] if targets else ["iphone-6.9"])
+    banners = targets["banners"] if targets and not device else []
+    layout = getattr(a, "layout", None) or ("store" if targets and not device else "flat")
+    if layout == "flat" and len(devices) > 1:
+        raise SystemExit("--layout flat yalnızca tek cihazla kullanılabilir (dosyalar üst üste yazılır); store veya asc seçin.")
     names = list(shot_paths)
     slides = data["slides"]
     only = {int(x) for x in a.only.split(",")} if getattr(a, "only", None) else None
     out = Path(a.out)
     warnings: list = []
-    cfgs = [slide_cfg(a, tpl, pal, i, s, shot_paths, names, warnings) for i, s in enumerate(slides)]
-    for lang in langs:
-        for i, cfg in enumerate(cfgs):
-            if not only or (i + 1) in only:
-                warnings += [(i + 1, f"[{lang}] {m}") for m in text_problems(cfg, lang)]
+    notes: list[str] = []
+    jobs = []
+    for dev in devices:
+        ns = argparse.Namespace(**{**vars(a), "device": dev})
+        limit = I.PLAY_MAX_SHOTS if dev.startswith("android") else len(slides)
+        if len(slides) > limit:
+            notes.append(f"{dev}: Google Play en fazla {limit} görsel alır; ilk {limit} sayfa üretildi.")
+        if dev.startswith("android-tablet") and len(slides) < I.TABLET_MIN_SHOTS:
+            notes.append(f"{dev}: Google Play tablet için en az {I.TABLET_MIN_SHOTS} görsel ister; {len(slides)} sayfa var.")
+        for lang in langs:
+            paths = shots_for(dev, lang, shot_paths, sets, notes)
+            for idx, s in enumerate(slides[:limit]):
+                if only and (idx + 1) not in only:
+                    continue
+                cfg = slide_cfg(ns, tpl, pal, idx, s, paths, names, warnings)
+                warnings += [(idx + 1, f"[{lang}] {m}") for m in text_problems(cfg, lang)]
+                slug = Path(s["shot"]).stem.lstrip("0123456789_- ") or "screen"
+                fname = f"{idx + 1:02d}_{slug}.{'jpg' if a.format == 'jpg' else 'png'}"
+                if layout == "store":
+                    d = out / lang / store_dir(dev)
+                elif layout == "asc":
+                    d = out / ASC_LOCALES.get(lang, lang) / DEVICES[dev]["asc"]
+                else:
+                    d = out / lang
+                jobs.append(dict(cfg=cfg, locale=lang, idx=idx, total=len(slides), path=str(d / fname), fmt=a.format))
+    for key in [] if only else banners:
+        b = BANNERS[key]
+        ns = argparse.Namespace(**{**vars(a), "device": b["device"]})
+        for lang in langs:
+            paths = shots_for(b["device"], lang, shot_paths, sets, notes)
+            cfg = slide_cfg(ns, tpl, pal, 0, slides[0], paths, names, warnings)
+            for k, i in (("image", 0), ("image2", 1), ("image3", 2)):
+                cfg[k] = str(paths[slides[i % len(slides)]["shot"]])
+            title, subtitle = banner_text(data, slides[0])
+            cfg.update(banner=key, dimension=tpl.get("dimension"), title=title, subtitle=subtitle, icon=icon)
+            jobs.append(dict(cfg=cfg, locale=lang, idx=0, total=1, path=str(out / lang / b["store"] / b["folder"] / f"{key}.png"),
+                             fmt="png"))
     grouped: dict[str, list[int]] = {}
     for n, msg in warnings:
-        grouped.setdefault(msg, []).append(n)
-    a.warnings = [f"slayt {', '.join(map(str, nums))}: {msg}" for msg, nums in grouped.items()]
+        grouped.setdefault(msg, [])
+        if n not in grouped[msg]:
+            grouped[msg].append(n)
+    if targets and not device:
+        stores = [st for st, pre in (("appstore", ("iphone", "ipad")), ("playstore", ("android",)))
+                  if any(d.startswith(pre) for d in devices)]
+        notes = [*I.notes_for(stores, devices, langs), *notes]
+    if len(langs) > 1 and not any(k.split("/")[1] for k in sets):
+        notes.append("Tüm dillerde aynı ekran görüntüleri kullanıldı. Dile özel arayüz için <klasör>/<dil>/ altına koyun.")
+    a.warnings = [f"slayt {', '.join(map(str, nums))}: {msg}" for msg, nums in grouped.items()] + list(dict.fromkeys(notes))
     for w in a.warnings:
         print(f"UYARI: {w}", file=sys.stderr)
-    jobs = []
-    for lang in langs:
-        for idx, s in enumerate(slides):
-            if only and (idx + 1) not in only:
-                continue
-            slug = Path(s["shot"]).stem.lstrip("0123456789_- ") or "screen"
-            fname = f"{idx + 1:02d}_{slug}.{'jpg' if a.format == 'jpg' else 'png'}"
-            if a.layout == "asc":
-                d = out / ASC_LOCALES.get(lang, lang) / DEVICES[a.device]["asc"]
-            else:
-                d = out / lang
-            jobs.append(dict(cfg=cfgs[idx], locale=lang, idx=idx, total=len(slides), path=str(d / fname), fmt=a.format))
     print(f"Çiziliyor: {len(jobs)} görsel, şablon '{tpl['name']}' ({tpl.get('dimension', '?').upper()}), {a.jobs} süreç …")
     done = 0
     paths_by_lang: dict[str, list[str]] = {l: [] for l in langs}
@@ -400,17 +570,126 @@ def cmd_render(a, data: dict | None = None):
                 print(f"[{done}/{len(jobs)}] {p}")
                 paths_by_lang[futs[f]["locale"]].append(p)
     print()
-    W, H = DEVICES[a.device]["size"]
     for lang, ps in paths_by_lang.items():
-        print(f"{lang}: {len(ps)} AYRI görsel (her biri tek başına {W}x{H}):")
+        print(f"{lang}: {len(ps)} AYRI görsel:")
         for p in sorted(ps):
             print(f"   {p}")
     if a.sheet:
         for lang, ps in paths_by_lang.items():
             make_sheet(sorted(ps), out / "_review" / f"overview_{lang}.jpg")
     if a.brief:
-        write_brief(out / "_review" / "claude-design-brief.md", data, tpl, langs, a.device, colors)
+        write_brief(out / "_review" / "claude-design-brief.md", data, tpl, langs, devices[0], colors)
+    a.render_state = dict(data=data, langs=langs, layout=layout, targets=targets, devices=devices, partial=bool(only))
     return paths_by_lang
+
+
+def store_dir(device: str) -> Path:
+    if device.startswith("android-"):
+        return Path("google-play") / device.removeprefix("android-")
+    return Path("app-store") / device
+
+
+def banner_text(data: dict, first_slide: dict) -> tuple:
+    """Copy dosyasındaki banner metni; yoksa ilk slaytın metni, alt başlık yoksa uygulama adı. Yalnızca metin alanları geçer."""
+    b = data.get("banner") if isinstance(data.get("banner"), dict) else {}
+
+    def text(v):
+        if isinstance(v, dict):
+            v = {k: x for k, x in v.items() if isinstance(x, str) and x}
+        return v if v and isinstance(v, (str, dict)) else None
+    return (text(b.get("title")) or first_slide.get("title"),
+            text(b.get("subtitle")) or text(first_slide.get("subtitle")) or str(data.get("app") or ""))
+
+
+def convert_previews(out: Path, previews: dict, langs: list[str], devices: list[str], warnings: list[str]) -> list[str]:
+    """Verilen ekran kayıtlarını dil klasörlerine dönüştürür. Sorun görsel üretimini durdurmaz, uyarı olur."""
+    if not previews:
+        return []
+    if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
+        warnings.append("App Preview atlandı: ffmpeg/ffprobe bulunamadı (macOS: brew install ffmpeg).")
+        return []
+    device = next((d for d in devices if d in PREVIEW_SIZES), "iphone-6.9")
+    done: dict[str, Path] = {}
+    written = []
+    for lang in langs:
+        src = previews.get(lang) or previews.get("*")
+        if not src:
+            continue
+        src = os.path.expanduser(str(src))
+        if Path(src).suffix.lower() not in VIDEO_EXT or not Path(src).is_file():
+            warnings.append(f"App Preview [{lang}] atlandı: {src} bir .mp4/.mov/.m4v dosyası değil.")
+            continue
+        dest = out / lang / "app-store" / "previews" / f"{device}.mp4"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            if src in done:
+                shutil.copy2(done[src], dest)
+            else:
+                cmd_preview(argparse.Namespace(input=src, out=str(dest), device=device, landscape=False, fit="cover",
+                                               pad_color="black", extend=False))
+                done[src] = dest
+            written.append(str(dest))
+        except (subprocess.CalledProcessError, OSError, ValueError, SystemExit) as e:
+            warnings.append(f"App Preview [{lang}] dönüştürülemedi: {e}")
+    return written
+
+
+def package_output(a, paths_by_lang: dict[str, list[str]]) -> dict:
+    """Mağaza düzeninde manifest ve zip yazar. Zip yalnızca bu çalıştırmanın dosyalarını alır, eski dosyalar girmez."""
+    st = a.render_state
+    if st["layout"] != "store" or st["partial"] or not st["targets"]:
+        return {}
+    from PIL import Image
+    out = Path(a.out)
+    warnings = a.warnings
+    videos = convert_previews(out, getattr(a, "previews", None) or {}, st["langs"], st["devices"], warnings)
+    files = []
+    for lang, ps in paths_by_lang.items():
+        for p in sorted(ps):
+            with Image.open(p) as im:
+                w, h = im.size
+            rp = Path(p).relative_to(out)
+            entry = dict(path=rp.as_posix(), lang=lang, store=rp.parts[1], target=rp.parts[2], width=w, height=h)
+            if rp.parts[2] in ("header-search", "feature-graphic"):
+                entry["works_with"] = BANNERS[Path(p).stem]["works_with"]
+            files.append(entry)
+    for v in videos:
+        rp = Path(v).relative_to(out)
+        files.append(dict(path=rp.as_posix(), lang=rp.parts[0], store=rp.parts[1], target=rp.parts[2]))
+    data = st["data"]
+    manifest = out / "manifest.json"
+    manifest.write_text(json.dumps(dict(app=data.get("app"), langs=st["langs"], design=data.get("design"), targets=st["targets"],
+                                        files=files, warnings=warnings), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    res = dict(manifest=str(manifest), output_files=len(files))
+    mode = getattr(a, "output_mode", None) or st["targets"]["output"]
+    if mode != "folder":
+        zip_path = out / f"{I.slug(data.get('app'))}.zip"  # klasör içinde: yanındaki başka bir dosyanın üzerine yazmaz
+        tmp = zip_path.with_suffix(".zip.tmp")
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
+            for f in files:
+                z.write(out / f["path"], f["path"])
+            z.write(manifest, "manifest.json")
+        os.replace(tmp, zip_path)
+        res["zip"] = str(zip_path)
+        print(f"Zip: {zip_path}")
+    if mode == "zip":
+        for lang in st["langs"]:
+            for f in files:
+                if f["lang"] == lang:
+                    (out / f["path"]).unlink(missing_ok=True)
+            for d in sorted((q for q in (out / lang).rglob("*") if q.is_dir()), key=lambda q: -len(q.parts)):
+                if not any(d.iterdir()):
+                    d.rmdir()
+            if (out / lang).is_dir() and not any((out / lang).iterdir()):
+                (out / lang).rmdir()
+    else:
+        print(f"Klasör: {out}")
+    return res
+
+
+def render_and_package(a, data: dict | None = None) -> dict:
+    paths = cmd_render(a, data)
+    return package_output(a, paths)
 
 
 def make_sheet(paths: list[str], dest: Path, h=900, gap=28):
@@ -468,8 +747,29 @@ def write_brief(dest: Path, data: dict, tpl: dict, langs: list[str], device: str
 
 
 def cmd_create(a):
+    if a.device:  # tek cihaz, eski düzen
+        a.langs, a.out, a.copy = a.langs or "en,tr", a.out or "out", a.copy or "shotforge.copy.json"
+        cmd_render(a, cmd_plan(a, quiet=False))
+        return
+    output = {True: "both", False: "folder", None: None}[a.zip]
+    answers = dict(store=a.store, header_sizes=a.header_sizes, langs=a.langs, devices=a.devices, previews=a.preview,
+                   output="zip" if a.zip_only else output)
+    if should_ask(a):
+        answers = ask_store_questions(a, answers)
+    try:
+        r = I.resolve(answers)
+    except ValueError as e:
+        raise SystemExit(str(e))
+    check_langs(r["langs"])
+    a.langs, a.previews = ",".join(r["langs"]), r["previews"]
+    app = a.app or (read_copy(Path(a.copy)).get("app") if a.copy and Path(a.copy).exists() else None)
+    a.out = a.out or str(Path("shotforge-out") / I.slug(app))
+    Path(a.out).mkdir(parents=True, exist_ok=True)
+    a.copy = a.copy or str(Path(a.out) / "shotforge.copy.json")
     data = cmd_plan(a, quiet=False)
-    cmd_render(a, data)
+    data["targets"] = r["targets"]
+    write_copy(Path(a.copy), data)
+    render_and_package(a, data)
 
 
 # --------------------------------------------------------------------------- #
@@ -512,6 +812,9 @@ def cmd_sizes(_):
     print("Ekran görüntüsü (PNG/JPEG, RGB, alfa yok, dil başına 1–10):")
     for k, d in DEVICES.items():
         print(f"  {k:12s} {d['size'][0]}x{d['size'][1]}   {d['label']}   [{d['asc']}]")
+    print("\nYatay mağaza görselleri (PNG/JPEG, alfa yok):")
+    for k, b in BANNERS.items():
+        print(f"  {k:12s} {b['works_with']}")
     print("\nApp Preview (H.264, 15–30 sn, ≤30 fps, ≤500 MB, AAC stereo):")
     for k, (w, h) in PREVIEW_SIZES.items():
         print(f"  {k:12s} {w}x{h} (portre)  /  {h}x{w} (yatay)")
@@ -590,8 +893,11 @@ def add_render_args(p):
     p.add_argument("--langs", default="en,tr", help="virgülle ayrılmış diller (varsayılan: en,tr)")
     p.add_argument("--copy", default="shotforge.copy.json", help="tasarım + metin dosyası (üretilir/okunur)")
     p.add_argument("-o", "--out", default="out")
-    p.add_argument("--device", default="iphone-6.9", choices=DEVICES)
-    p.add_argument("--layout", default="flat", choices=["flat", "asc"], help="asc: out/<dil>/<DISPLAY_TYPE>/NN_ad.png")
+    p.add_argument("--device", default=None, choices=DEVICES,
+                   help="tek cihaz (eski düzen); verilmezse mağaza hedefleri kullanılır, yoksa iphone-6.9")
+    p.add_argument("--layout", default=None, choices=["flat", "asc", "store"],
+                   help="store: out/<dil>/<mağaza>/<hedef>/… | flat: out/<dil>/NN_ad.png | asc: out/<dil>/<DISPLAY_TYPE>/NN_ad.png")
+    p.add_argument("--icon", default=None, metavar="DOSYA", help="Header ve feature graphic için uygulama ikonu")
     p.add_argument("--format", default="png", choices=["png", "jpg"])
     p.add_argument("--jobs", type=int, default=max(1, min(3, os.cpu_count() or 1)), help="paralel süreç sayısı")
     p.add_argument("--style", default=None, help="şablon düzenini geçersiz kıl: " + " | ".join(["alt", *STYLES]))
@@ -638,7 +944,15 @@ def main(argv=None):
     c.add_argument("shots", nargs="+", help="ekran görüntüsü dosyaları veya klasör")
     add_design_args(c)
     add_render_args(c)
-    c.set_defaults(fn=cmd_create)
+    g = c.add_argument_group("mağaza hedefleri (verilmeyeni varsayılan olur)")
+    g.add_argument("--store", default=None, help="appstore | playstore | both (varsayılan: both)")
+    g.add_argument("--header-sizes", default=None, help=f"{','.join(I.HEADER_SIZES)} veya no (varsayılan: hepsi)")
+    g.add_argument("--devices", default=None, help=f"virgülle: {', '.join(DEVICES)} (varsayılan: iphone-6.9, android-phone)")
+    g.add_argument("--preview", action="append", default=None, metavar="[DİL=]KAYIT",
+                   help="App Preview'a çevrilecek ekran kaydı; dil verilmezse tüm diller (tekrarlanabilir)")
+    g.add_argument("--zip", action=argparse.BooleanOptionalAction, default=None, help="zip de üret (varsayılan: evet)")
+    g.add_argument("--zip-only", action="store_true", help="görselleri yalnızca zip içinde bırak")
+    c.set_defaults(fn=cmd_create, langs=None, out=None, copy=None)
 
     pl = sub.add_parser("plan", help="yalnızca tasarım kararlarını ve metinleri üret (shotforge.copy.json)")
     pl.add_argument("shots", nargs="+")
@@ -654,7 +968,7 @@ def main(argv=None):
     r.add_argument("--text-color", default=None, metavar="#HEX")
     r.add_argument("--accent", default=None, metavar="#HEX")
     add_render_args(r)
-    r.set_defaults(fn=lambda a: cmd_render(a), langs=None)  # verilmezse copy dosyasındaki diller
+    r.set_defaults(fn=lambda a: render_and_package(a), langs=None)  # verilmezse copy dosyasındaki diller
 
     an = sub.add_parser("analyze", help="ekran görüntülerini analiz et ve kural motorunun 2D/3D şablon önerisini göster (Claude'suz)")
     an.add_argument("shots", nargs="+")
