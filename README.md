@@ -35,11 +35,11 @@ Requires Python 3.10+.
 
 ```bash
 # CLI
-pipx install "git+https://github.com/ibrahimatmaca/shotforge"
+pipx install "git+https://github.com/ibrahimatmaca/shotforge@v0.5.0"
 # CLI + MCP server
-pipx install "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge"
+pipx install "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0"
 # or run without installing (needs uv)
-uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge" shotforge-mcp
+uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0" shotforge-mcp
 
 shotforge doctor     # checks Python deps, ffmpeg (optional), claude CLI / API keys
 ```
@@ -169,7 +169,7 @@ its own work. No API key is needed.
 ```bash
 # Claude Code
 claude mcp add shotforge -- shotforge-mcp
-#   (without installing:  claude mcp add shotforge -- uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge" shotforge-mcp)
+#   (without installing:  claude mcp add shotforge -- uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0" shotforge-mcp)
 ```
 
 Claude Desktop / Cursor / any MCP client (`claude_desktop_config.json` or the client's MCP settings):
@@ -179,7 +179,7 @@ Claude Desktop / Cursor / any MCP client (`claude_desktop_config.json` or the cl
   "mcpServers": {
     "shotforge": {
       "command": "uvx",
-      "args": ["--from", "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge", "shotforge-mcp"]
+      "args": ["--from", "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0", "shotforge-mcp"]
     }
   }
 }
@@ -238,12 +238,10 @@ OpenAI account's data terms still apply. Usage counts against *your* plan or API
 
 ## Status and known limitations
 
-Beta (v0.4). CI runs the test-suite on Linux and macOS, Python 3.10–3.13.
+Beta (v0.5). CI runs the test-suite on Linux with Python 3.10–3.14 and on macOS with Python 3.13.
 
 - The `claude -p` path is covered by tests against a fake `claude` executable that mimics Claude Code's JSON envelope; please report
   anything that differs with your real installation. The MCP server was exercised with the official MCP client on `mcp` 1.30 and 2.3.
-- The CLI's messages and `--help` are currently **in Turkish** (README and MCP tool descriptions are English). English UI is the next planned
-  improvement — contributions welcome.
 - Linux/macOS are tested; Windows is untested.
 - Device frames are generic modern-phone drawings, not Apple's official bezels. ~5–6 s per image.
 - Headlines: ≤ 3 lines, subtitles ≤ 2 lines; long text shrinks automatically, and text that still overflows is reported. The bundled Inter font has no Japanese, Korean or Arabic glyphs: shotforge warns, and `--font` selects another font (Arabic also needs Pillow with raqm). Screenshot analysis is a simple heuristic (a hint, not a verdict).

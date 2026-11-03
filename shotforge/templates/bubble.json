@@ -8,7 +8,7 @@
     "productivity",
     "health"
   ],
-  "description": "2D · canlı mor: açık ↔ doygun zemin dönüşümü, sola dayalı başlık, blob/dalga/parıltı süsleri, düz telefon.",
+  "description": "2D · vivid purple: alternating pale and saturated backgrounds, left-aligned headline, blob, squiggle and sparkle decorations, flat phone.",
   "design_notes": "Playful education/lifestyle look. Slides alternate between a pale tint of the main colour (headline in a deep shade of it) and the saturated main colour (white headline, light accent). Headlines are left-aligned, extra-bold, large, 2-3 lines. Organic darker blob shapes sit behind the phone; a hand-drawn squiggle underlines the headline and a small four-point sparkle sits at the top right. The phone is shown flat and front-facing in black, slightly overlapping the bottom edge.",
   "palette": {
     "background": "#6D3AE8",

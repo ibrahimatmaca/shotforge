@@ -8,7 +8,7 @@
     "finance",
     "utilities"
   ],
-  "description": "2D · simsiyah zemin, iri başlık + parlak vurgu, slaytlar boyunca kesintisiz ECG çizgisi, neon çerçeveli düz telefon.",
+  "description": "2D · near-black background, oversized headline with a bright accent, an ECG line that continues across slides, flat phone with a neon rim.",
   "design_notes": "Fitness/health, near-black look. Oversized centered white headline with the key phrase in the accent colour. A thin accent-coloured heartbeat (ECG) line runs horizontally just under the headline and continues seamlessly from slide to slide. The phone is dark with a thin neon rim in the accent colour and a soft glow, front-facing. Minimal, high contrast, no gradients.",
   "palette": {
     "background": "#070707",

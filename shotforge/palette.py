@@ -117,7 +117,7 @@ def build_palette(tpl: dict, colors: dict | None = None) -> dict:
             v = v[0] if v else None
         if v:
             if not is_hex(v):
-                raise ValueError(f"Geçersiz renk ({k}): {v}  (örnek: #6D28D9)")
+                raise ValueError(f"Invalid colour ({k}): {v}  (example: #6D28D9)")
             d[k] = v
     user_bg = bool(colors.get("background"))
     user_accent = bool(colors.get("accent"))
@@ -182,13 +182,13 @@ def slide_style(tpl: dict, pal: dict, idx: int, warnings: list) -> dict:
             stops, angle = [bg, darken(bg, 0.10)], 165
             text, accent = best_text(bg), (ac if pal["user_accent"] else lighten(bg, 0.75))
     else:
-        raise SystemExit(f"Bilinmeyen bg_mode: {mode}")
+        raise SystemExit(f"Unknown bg_mode: {mode}")
 
     if pal["user_text"] is not None:
         text, changed = ensure_text_contrast(pal["user_text"], stops)
         if changed:
-            warnings.append((idx + 1, f"yazı rengi {rgb2hex(pal['user_text'])} bu arka planda okunaksız "
-                                      f"(kontrast < 3:1); {rgb2hex(text)} kullanıldı."))
+            warnings.append((idx + 1, f"text colour {rgb2hex(pal['user_text'])} is unreadable on this background "
+                                      f"(contrast < 3:1); {rgb2hex(text)} was used."))
     accent = ensure_accent_contrast(accent, stops)
     spec = ",".join(rgb2hex(c) for c in stops)
     return dict(bg=spec, bg_angle=angle, text_color=rgb2hex(text), accent=rgb2hex(accent), no_glow=no_glow,
@@ -272,18 +272,18 @@ CAT_2D_STRONG = {"finance", "productivity", "utilities", "health"}
 CAT_2D_WEAK = {"fitness", "education"}
 
 RULES_TEXT = """\
-2D / 3D ve şablon seçim kuralları (--template auto iken)
-  2D = telefon düz veya yalnızca düzlem içinde döndürülmüş; 3D = perspektifli, kalınlığı görünen eğik telefon.
-  Boyut puanı (>=1 ise 3D, değilse 2D):
-    +2  kategori: games, photo, travel, shopping, entertainment, lifestyle
-    -2  kategori: finance, productivity, utilities, health      (-1: fitness, education)
-    +1  en çok 3 farklı ekran görüntüsü (vitrin / hero etkisi)
-    -2  ekran görüntüleri yoğun, küçük yazılı (okunabilirlik için düz kalmalı)
-    +1  ton: premium, playful, creative, bold
-  Boyut --dimension 2d|3d ile zorlanabilir; --template verilirse hiçbir otomatik seçim yapılmaz.
-  Seçilen boyutun içinde şablon puanı: +3 tema uyumu (koyu ana renk -> dark, çok açık -> light, canlı orta ton -> colorful),
-  +3 kategori uyumu (şablonun best_for listesi); eşitlikte şablon sırası.
-  Kullanıcı arka plan rengi verdiyse, temayı o renkle uyumsuz bir şablon (ör. koyu renk + açık şablon) seçilmez; Claude önerse bile kural motoru değiştirir.
+2D / 3D and template selection rules (with --template auto)
+  2D = phone flat or rotated only in the plane; 3D = phone tilted in perspective with visible thickness.
+  Dimension score (>=1 means 3D, otherwise 2D):
+    +2  category: games, photo, travel, shopping, entertainment, lifestyle
+    -2  category: finance, productivity, utilities, health      (-1: fitness, education)
+    +1  at most 3 different screenshots (showcase / hero effect)
+    -2  screenshots are dense with small text (stay flat for readability)
+    +1  tone: premium, playful, creative, bold
+  Force a dimension with --dimension 2d|3d; --template turns off all automatic selection.
+  Template score within the chosen dimension: +3 theme match (dark main colour -> dark, very light -> light, vivid mid tone -> colorful),
+  +3 category match (the template's best_for list); ties go to template order.
+  If you give a background colour, a template whose theme clashes with it (e.g. dark colour + light template) is not chosen; the rules replace it even if the AI suggests it.
 """
 
 
@@ -327,30 +327,30 @@ def choose_template(templates: dict, *, dimension: str | None = None, category: 
     reasons: list[str] = []
     if dimension in ("2d", "3d"):
         dim = dimension
-        reasons.append(f"boyut {dim.upper()} olarak istendi")
+        reasons.append(f"dimension {dim.upper()} was requested")
     else:
         score = 0
         if category in CAT_3D:
             score += 2
-            reasons.append(f"kategori '{category}' 3D'ye yatkın (+2)")
+            reasons.append(f"category '{category}' suits 3D (+2)")
         elif category in CAT_2D_STRONG:
             score -= 2
-            reasons.append(f"kategori '{category}' 2D'ye yatkın (-2)")
+            reasons.append(f"category '{category}' suits 2D (-2)")
         elif category in CAT_2D_WEAK:
             score -= 1
-            reasons.append(f"kategori '{category}' 2D'ye hafif yatkın (-1)")
+            reasons.append(f"category '{category}' slightly suits 2D (-1)")
         if profile:
             if profile.get("count", 99) <= 3:
                 score += 1
-                reasons.append("en çok 3 farklı ekran: vitrin etkisi (+1)")
+                reasons.append("at most 3 different screens: showcase effect (+1)")
             if profile.get("density") == "high":
                 score -= 2
-                reasons.append("ekranlar yoğun/küçük yazılı: okunabilirlik için düz (-2)")
+                reasons.append("screens are dense or use small text: flat for readability (-2)")
         if re.search(r"premium|playful|creative|bold|eğlenceli|yaratıcı", tone or "", re.I):
             score += 1
-            reasons.append("ton premium/eğlenceli/yaratıcı (+1)")
+            reasons.append("tone is premium, playful or creative (+1)")
         dim = "3d" if score >= 1 else "2d"
-        reasons.append(f"toplam puan {score:+d} -> {dim.upper()}")
+        reasons.append(f"total score {score:+d} -> {dim.upper()}")
     pool = {n: t for n, t in templates.items() if t.get("dimension") == dim}
     if not pool:
         pool = dict(templates)
@@ -364,5 +364,5 @@ def choose_template(templates: dict, *, dimension: str | None = None, category: 
             s += 3
         if s > best_s:
             best, best_s = n, s
-    reasons.append(f"tema '{theme}', kategori '{category or '?'}' -> {best} (puan {best_s})")
+    reasons.append(f"theme '{theme}', category '{category or '?'}' -> {best} (score {best_s})")
     return best, templates[best].get("dimension", dim), reasons

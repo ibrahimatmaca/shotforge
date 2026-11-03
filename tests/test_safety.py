@@ -2,6 +2,7 @@
 import argparse
 import asyncio
 import json
+import sys
 
 import pytest
 
@@ -51,7 +52,7 @@ def test_bad_langs_rejected_before_any_render(shots_dir, tmp_path, lang):
                 slides=[dict(shot="01_home.png", title={"en": "a"}, subtitle={})])
     copy = tmp_path / "c.json"
     copy.write_text(json.dumps(data), encoding="utf-8")
-    with pytest.raises(SystemExit, match="dil kodu"):
+    with pytest.raises(SystemExit, match="language code"):
         cli.cmd_render(render_args(copy=str(copy), out=str(tmp_path / "o")))
     assert not (tmp_path / "o").exists()
 
@@ -60,7 +61,7 @@ def test_text_problems():
     cfg = dict(device="iphone-6.9")
     assert engine.text_problems(dict(cfg, title={"tr": "Gününü *planla* şimdi"}), "tr") == []
     assert any("日" in m for m in engine.text_problems(dict(cfg, title={"ja": "日本語"}), "ja"))
-    assert any("taşıyor" in m for m in engine.text_problems(dict(cfg, title={"tr": "Uluslararasılaştırılabilirlikçilerimizden"}), "tr"))
+    assert any("overflows" in m for m in engine.text_problems(dict(cfg, title={"tr": "Uluslararasılaştırılabilirlikçilerimizden"}), "tr"))
 
 
 @pytest.mark.parametrize("value", ["abc", "0", "15"])
@@ -91,7 +92,7 @@ def test_reusing_copy_for_other_app_warns(shots_dir, tmp_path, capsys):
     main(base + ["--app", "Demo"])
     capsys.readouterr()
     main(base + ["--app", "Demo"])
-    assert "UYARI" not in capsys.readouterr().err
+    assert "WARNING" not in capsys.readouterr().err
     main(base + ["--app", "Other"])
     assert "--regen" in capsys.readouterr().err
 
@@ -146,12 +147,12 @@ def test_copy_file_cannot_set_icon_or_font_through_banner(tmp_path, shots_dir):
 def test_bad_shot_set_key_is_ignored(tmp_path, shots_dir, capsys):
     copy = _copy_with(tmp_path, shots_dir, shots_by_set={"../../x/": {"01_home.png": "01_home.png"}})
     main(["render", "--copy", str(copy), "--jobs", "1", "--only", "1", "-o", str(tmp_path / "o")])
-    assert "tanınmayan shots_by_set" in capsys.readouterr().err
+    assert "unknown shots_by_set" in capsys.readouterr().err
 
 
 def test_icon_must_be_an_image(tmp_path, shots_dir):
     copy = _copy_with(tmp_path, shots_dir)
-    with pytest.raises(SystemExit, match="İkon"):
+    with pytest.raises(SystemExit, match="Icon"):
         main(["render", "--copy", str(copy), "--jobs", "1", "--icon", "/etc/hosts", "-o", str(tmp_path / "o")])
 
 
@@ -160,3 +161,67 @@ def test_mcp_tool_rejects_bad_store_cleanly(shots_dir, tmp_path):
     from shotforge import mcp_server as S
     with pytest.raises(S.ToolError):
         asyncio.run(S.create_screenshots([str(shots_dir)], "D", intake_completed=True, store="windows", out_dir=str(tmp_path)))
+
+
+@pytest.mark.parametrize("change,message", [
+    (dict(shots=["a.png"]), "'shots' must map"),
+    (dict(slides=[]), "'slides' must be"),
+    (dict(slides=[dict(shot="other.png")]), "unknown screenshot"),
+    (dict(shots_by_set={"android/": "x"}), "'shots_by_set' must map"),
+    (dict(langs="en"), "language code"),
+])
+def test_malformed_copy_file_is_a_clear_error(shots_dir, tmp_path, change, message):
+    data = dict(langs=["en"], design=dict(template="classic", colors={}), shots={"01_home.png": str(shots_dir / "01_home.png")},
+                slides=[dict(shot="01_home.png", title={"en": "a"}, subtitle={})])
+    copy = tmp_path / "c.json"
+    copy.write_text(json.dumps({**data, **change}), encoding="utf-8")
+    with pytest.raises(SystemExit, match=message):
+        cli.cmd_render(render_args(copy=str(copy), out=str(tmp_path / "o")))
+
+
+def test_copy_file_loading_a_local_template_warns(shots_dir, tmp_path, capsys, monkeypatch):
+    custom = tmp_path / "my.json"
+    custom.write_text(json.dumps(cli.list_templates()["bubble"]), encoding="utf-8")
+    data = dict(langs=["en"], design=dict(template=str(custom), colors={}), shots={"01_home.png": str(shots_dir / "01_home.png")},
+                slides=[dict(shot="01_home.png", title={"en": "a"}, subtitle={})])
+    copy = tmp_path / "c.json"
+    copy.write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.setattr(cli, "render_job", lambda j: j["path"])
+    cli.cmd_render(render_args(copy=str(copy), out=str(tmp_path / "o")))
+    assert "loads a local template file" in capsys.readouterr().err
+
+
+def test_ffmpeg_and_ffprobe_only_read_local_files(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        return argparse.Namespace(stdout="20\n")
+    monkeypatch.setattr(cli.shutil, "which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    cli.cmd_preview(argparse.Namespace(input="in.mov", out=str(tmp_path / "o.mp4"), device="iphone-6.9", landscape=False,
+                                       fit="cover", pad_color="black", extend=False))
+    assert calls and all(c[c.index("-protocol_whitelist") + 1] == "file" for c in calls)
+    assert calls[-1].index("-protocol_whitelist") < calls[-1].index("-i")
+
+
+def test_anthropic_error_text_is_not_printed(tmp_path, monkeypatch, shots_dir):
+    class AnthropicError(Exception):
+        status_code = 401
+
+    class Messages:
+        def create(self, **kw):
+            raise AnthropicError("key sk-secret rejected")
+    fake = argparse.Namespace(AnthropicError=AnthropicError, Anthropic=lambda: argparse.Namespace(messages=Messages()))
+    monkeypatch.setitem(sys.modules, "anthropic", fake)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret")
+    with pytest.raises(RuntimeError) as e:
+        copywriter._api("p", {"01_home.png": shots_dir / "01_home.png"}, None)
+    assert "sk-secret" not in str(e.value) and "401" in str(e.value)
+
+
+def test_cli_reports_runtime_errors_without_traceback(tmp_path):
+    bad = tmp_path / "bad.png"
+    bad.write_text("not an image", encoding="utf-8")
+    with pytest.raises(SystemExit, match="Error:"):
+        main(["analyze", str(bad)])

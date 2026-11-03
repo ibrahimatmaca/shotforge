@@ -16,7 +16,7 @@ tr: Gününü *planla*
     assert len(s) == 2
     assert s[0]["shot"] == "01_home.png" and s[0]["title"]["en"] == "Build *habits*" and s[0]["subtitle"]["tr"] == "Tek sakin ekran"
     assert s[1]["title"] == {"tr": "Gününü *planla*"}
-    assert T.missing(s, 2, ["en", "tr"]) == ["slayt 2: 'en' başlığı eksik"]
+    assert T.missing(s, 2, ["en", "tr"]) == ["slide 2: 'en' title is missing"]
 
 
 def test_parse_json_and_errors(tmp_path):

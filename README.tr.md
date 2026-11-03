@@ -33,11 +33,11 @@ Python 3.10+ gerekir.
 
 ```bash
 # CLI
-pipx install "git+https://github.com/ibrahimatmaca/shotforge"
+pipx install "git+https://github.com/ibrahimatmaca/shotforge@v0.5.0"
 # CLI + MCP sunucusu
-pipx install "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge"
+pipx install "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0"
 # kurmadan çalıştırma (uv gerekir)
-uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge" shotforge-mcp
+uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0" shotforge-mcp
 
 shotforge doctor     # Python bağımlılıkları, ffmpeg (isteğe bağlı), claude CLI / API anahtarları kontrolü
 ```
@@ -162,7 +162,7 @@ metinleri yazar ve araçları çağırır; shotforge çizer ve Claude'un kendi i
 ```bash
 # Claude Code
 claude mcp add shotforge -- shotforge-mcp
-#   (kurmadan:  claude mcp add shotforge -- uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge" shotforge-mcp)
+#   (kurmadan:  claude mcp add shotforge -- uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0" shotforge-mcp)
 ```
 
 Claude Desktop / Cursor / diğer MCP istemcileri:
@@ -172,7 +172,7 @@ Claude Desktop / Cursor / diğer MCP istemcileri:
   "mcpServers": {
     "shotforge": {
       "command": "uvx",
-      "args": ["--from", "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge", "shotforge-mcp"]
+      "args": ["--from", "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0", "shotforge-mcp"]
     }
   }
 }
@@ -211,11 +211,11 @@ Kullanım *sizin* planınızdan/API faturanızdan düşer. Modelin çıktısı d
 
 ## Durum ve bilinen sınırlar
 
-Beta (v0.4). CI, testleri Linux ve macOS'ta Python 3.10–3.13 ile çalıştırır.
+Beta (v0.5). CI, testleri Linux'ta Python 3.10–3.14 ile, macOS'ta Python 3.13 ile çalıştırır.
 
 - `claude -p` yolu, Claude Code'un JSON zarfını taklit eden sahte bir `claude` ile test edilir; gerçek kurulumunuzda farklı bir şey görürseniz lütfen bildirin.
   MCP sunucusu resmi MCP istemcisiyle `mcp` 1.30 ve 2.3 üzerinde denendi.
-- CLI mesajları ve `--help` şu an **Türkçe**; README ve MCP araç açıklamaları İngilizce. İngilizce arayüz sıradaki iyileştirme — katkıya açığız.
+- CLI mesajları ve `--help` İngilizcedir.
 - Linux/macOS test edilir; Windows denenmedi.
 - Çerçeve genel bir modern telefon çizimidir (Apple'ın resmi bezel'i değil). Görsel başına ~5–6 sn.
 - Başlık ≤ 3, alt başlık ≤ 2 satır; uzun metin otomatik küçülür. Ekran analizi basit bir sezgidir (ipucu, hüküm değil).
