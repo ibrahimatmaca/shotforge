@@ -1,0 +1,38 @@
+{
+  "name": "halo",
+  "dimension": "2d",
+  "theme": "dark",
+  "best_for": [
+    "health",
+    "fitness",
+    "productivity",
+    "utilities"
+  ],
+  "description": "2D · koyu zemin, vurgu renginde parıltılı büyük telefon (alttan taşar), tek vurgu kelimeli başlık.",
+  "design_notes": "Health/wellness dark theme. Near-black background with a faint tint of the main colour. Centered bold white headline with one accent word. The phone is large, bleeds off the bottom edge, and has a glow in the accent colour radiating around its outline (inner glow feel). Clean, sharp hierarchy; no decorative clutter.",
+  "palette": {
+    "background": "#0A1310",
+    "accent": "#34D399"
+  },
+  "bg_mode": "dark-gradient",
+  "defaults": {
+    "align": "center",
+    "title_scale": 1.0,
+    "frame": "$bg_lift",
+    "frame_rim": 0.006,
+    "glow": {
+      "color": "$accent",
+      "blur": 0.045,
+      "alpha": 0.75
+    }
+  },
+  "layouts": [
+    "peek-flat",
+    "peek-flat",
+    "flat",
+    "peek-flat",
+    "peek-flat",
+    "duo-flat",
+    "peek-flat"
+  ]
+}

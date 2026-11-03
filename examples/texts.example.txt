@@ -1,0 +1,37 @@
+# Kendi metinlerinizi bu biçimde yazın. Eksik bıraktığınız slayt/dil olursa Claude tamamlar.
+# Biçim:  dil: Başlık | Alt başlık      (*kelime* = vurgu rengi)
+
+# slayt 1
+shot: 01_home.png
+en: Build habits that *stick* | Your whole day on one calm screen
+tr: Kalıcı *alışkanlıklar* edin | Tüm günün tek sakin ekranda
+
+# slayt 2
+shot: 01_home.png
+en: Plan your *day* in seconds | Add, check off and track every habit
+tr: Gününü saniyeler içinde *planla* | Alışkanlıklarını ekle, işaretle, takip et
+
+# slayt 3
+shot: 02_stats.png
+en: See your *progress* | Weekly charts that show what works
+tr: Gelişimini *gör* | İşe yarayanı gösteren haftalık grafikler
+
+# slayt 4
+shot: 03_goals.png
+en: Reach every *goal* | Track weekly targets at a glance
+tr: Her *hedefe* ulaş | Haftalık hedeflerini tek bakışta izle
+
+# slayt 5
+shot: 02_stats.png
+en: Keep your *streak* alive | Records and streaks keep you going
+tr: *Serini* bozma | Seri ve rekorlar seni motive eder
+
+# slayt 6
+shot: 04_profile.png
+en: Make it *yours* | Reminders and themes that fit your life
+tr: Sana *özel* yap | Hayatına uyan hatırlatıcı ve temalar
+
+# slayt 7
+shot: 03_goals.png
+en: Start *today* | Download Habita and begin
+tr: Hemen *başla* | Habita'yı indir ve başla

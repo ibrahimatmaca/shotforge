@@ -1,0 +1,37 @@
+{
+  "name": "slant",
+  "dimension": "2d",
+  "theme": "dark",
+  "best_for": [
+    "social",
+    "entertainment",
+    "productivity"
+  ],
+  "description": "2D · koyu zemin, sola dayalı başlık, kalın vurgu çerçeveli telefon düzlem içinde eğik, sağdan taşar.",
+  "design_notes": "Social/community dark theme. Dark background from the main colour. Left-aligned bold white headline whose key words are in the accent colour. The phone has a thick rim in the accent colour, is rotated about 14 degrees counter-clockwise in the plane and bleeds off the right/bottom edge, giving a dynamic, divided-frame feel (no perspective).",
+  "palette": {
+    "background": "#171F3D",
+    "accent": "#A78BFA"
+  },
+  "bg_mode": "dark-gradient",
+  "defaults": {
+    "align": "left",
+    "title_scale": 1.0,
+    "frame": "$accent",
+    "frame_rim": 0.022,
+    "glow": {
+      "color": "$accent",
+      "blur": 0.022,
+      "alpha": 0.3
+    }
+  },
+  "layouts": [
+    "rotate-l",
+    "rotate-l",
+    "duo-flat",
+    "rotate-l",
+    "flat",
+    "rotate-l",
+    "rotate-l"
+  ]
+}

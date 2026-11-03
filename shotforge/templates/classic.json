@@ -1,0 +1,34 @@
+{
+  "name": "classic",
+  "dimension": "3d",
+  "theme": "colorful",
+  "best_for": [
+    "entertainment",
+    "lifestyle",
+    "travel",
+    "shopping",
+    "social",
+    "photo"
+  ],
+  "description": "3D · canlı degrade zemin, sağa/sola dönüşümlü perspektifli eğik telefon, ortalı başlık.",
+  "design_notes": "Vivid diagonal gradient built from the main colour with soft light blobs. Centered extra-bold headline with one accent word, regular-weight subtitle below. A black-titanium iPhone is angled in 3D perspective (alternating right/left) with visible thickness and a deep soft drop shadow.",
+  "palette": {
+    "background": "#6D28D9",
+    "accent": "#FDE047"
+  },
+  "bg_mode": "gradient",
+  "defaults": {
+    "align": "center",
+    "title_scale": 1.0,
+    "frame": "black"
+  },
+  "layouts": [
+    "tilt-right",
+    "tilt-left",
+    "duo",
+    "tilt-right",
+    "tilt-left",
+    "peek",
+    "tilt-right"
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "name": "heartbeat",
+  "dimension": "2d",
+  "theme": "dark",
+  "best_for": [
+    "fitness",
+    "health",
+    "finance",
+    "utilities"
+  ],
+  "description": "2D · simsiyah zemin, iri başlık + parlak vurgu, slaytlar boyunca kesintisiz ECG çizgisi, neon çerçeveli düz telefon.",
+  "design_notes": "Fitness/health, near-black look. Oversized centered white headline with the key phrase in the accent colour. A thin accent-coloured heartbeat (ECG) line runs horizontally just under the headline and continues seamlessly from slide to slide. The phone is dark with a thin neon rim in the accent colour and a soft glow, front-facing. Minimal, high contrast, no gradients.",
+  "palette": {
+    "background": "#070707",
+    "accent": "#BEF264"
+  },
+  "bg_mode": "dark-gradient",
+  "defaults": {
+    "align": "center",
+    "title_scale": 1.1,
+    "frame": "$accent",
+    "frame_rim": 0.01,
+    "glow": {
+      "color": "$accent",
+      "blur": 0.03,
+      "alpha": 0.55
+    },
+    "deco": [
+      {
+        "type": "pulse-line",
+        "color": "$accent"
+      }
+    ]
+  },
+  "layouts": [
+    "flat",
+    "flat",
+    "flat",
+    "duo-flat",
+    "flat",
+    "flat",
+    "flat"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "name": "prism3d",
+  "dimension": "3d",
+  "theme": "light",
+  "best_for": [
+    "lifestyle",
+    "shopping",
+    "travel",
+    "photo",
+    "education",
+    "social"
+  ],
+  "description": "3D · açık pastel zemin, koyu başlık, gümüş çerçeveli perspektifli telefon, yumuşak gölge.",
+  "design_notes": "Light, airy 3D look. Very pale tint of the main colour as a soft gradient background; headline in a deep shade of the main colour with the accent word in the saturated main colour. A silver iPhone is tilted in 3D perspective (alternating directions, sometimes two phones overlapping) with a soft, long shadow.",
+  "palette": {
+    "background": "#6D5DF6"
+  },
+  "bg_mode": "light-gradient",
+  "defaults": {
+    "align": "center",
+    "title_scale": 1.0,
+    "frame": "silver"
+  },
+  "layouts": [
+    "tilt-right",
+    "tilt-left",
+    "duo",
+    "tilt-right",
+    "peek",
+    "tilt-left",
+    "tilt-right"
+  ]
+}

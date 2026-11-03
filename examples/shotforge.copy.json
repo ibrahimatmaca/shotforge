@@ -1,0 +1,114 @@
+{
+  "app": "Habita",
+  "about": "Habit tracker",
+  "tone": "confident, friendly, benefit-first",
+  "langs": [
+    "en",
+    "tr"
+  ],
+  "generated_with": "user",
+  "design": {
+    "category": "health",
+    "dimension": "3d",
+    "template": "classic",
+    "template_reason": "kullanıcı seçti",
+    "colors": {
+      "background": "#6d28d9",
+      "text": "#ffffff",
+      "accent": "#fde047"
+    },
+    "count": 7
+  },
+  "shots": {
+    "01_home.png": "input/01_home.png",
+    "02_stats.png": "input/02_stats.png",
+    "03_goals.png": "input/03_goals.png",
+    "04_profile.png": "input/04_profile.png"
+  },
+  "slides": [
+    {
+      "shot": "01_home.png",
+      "role": "hook",
+      "title": {
+        "en": "Build habits that *stick*",
+        "tr": "Kalıcı *alışkanlıklar* edin"
+      },
+      "subtitle": {
+        "en": "Your whole day on one calm screen",
+        "tr": "Tüm günün tek sakin ekranda"
+      }
+    },
+    {
+      "shot": "01_home.png",
+      "role": "feature",
+      "title": {
+        "en": "Plan your *day* in seconds",
+        "tr": "Gününü saniyeler içinde *planla*"
+      },
+      "subtitle": {
+        "en": "Add, check off and track every habit",
+        "tr": "Alışkanlıklarını ekle, işaretle, takip et"
+      }
+    },
+    {
+      "shot": "02_stats.png",
+      "role": "feature",
+      "title": {
+        "en": "See your *progress*",
+        "tr": "Gelişimini *gör*"
+      },
+      "subtitle": {
+        "en": "Weekly charts that show what works",
+        "tr": "İşe yarayanı gösteren haftalık grafikler"
+      }
+    },
+    {
+      "shot": "03_goals.png",
+      "role": "feature",
+      "title": {
+        "en": "Reach every *goal*",
+        "tr": "Her *hedefe* ulaş"
+      },
+      "subtitle": {
+        "en": "Track weekly targets at a glance",
+        "tr": "Haftalık hedeflerini tek bakışta izle"
+      }
+    },
+    {
+      "shot": "02_stats.png",
+      "role": "feature",
+      "title": {
+        "en": "Keep your *streak* alive",
+        "tr": "*Serini* bozma"
+      },
+      "subtitle": {
+        "en": "Records and streaks keep you going",
+        "tr": "Seri ve rekorlar seni motive eder"
+      }
+    },
+    {
+      "shot": "04_profile.png",
+      "role": "feature",
+      "title": {
+        "en": "Make it *yours*",
+        "tr": "Sana *özel* yap"
+      },
+      "subtitle": {
+        "en": "Reminders and themes that fit your life",
+        "tr": "Hayatına uyan hatırlatıcı ve temalar"
+      }
+    },
+    {
+      "shot": "03_goals.png",
+      "role": "cta",
+      "title": {
+        "en": "Start *today*",
+        "tr": "Hemen *başla*"
+      },
+      "subtitle": {
+        "en": "Download Habita and begin",
+        "tr": "Habita'yı indir ve başla"
+      }
+    }
+  ]
+}
