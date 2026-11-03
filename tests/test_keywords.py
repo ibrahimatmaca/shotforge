@@ -29,6 +29,7 @@ def test_prompt_has_keywords_only_when_given():
 def test_keyword_gaps_ignores_accent_marks_and_case():
     slides = [dict(title={"en": "Build a *Habit* tracker"}, subtitle={"en": "Keep your streak"})]
     assert C.keyword_gaps(slides, ["habit tracker", "STREAK", "focus"]) == ["focus"]
+    assert C.keyword_gaps([dict(title={"en": "Meet Habita"})], ["habit"]) == ["habit"]  # kelimenin parçası sayılmaz
 
 
 def test_offline_run_warns_and_records_keywords(shots_dir, tmp_path, capsys):

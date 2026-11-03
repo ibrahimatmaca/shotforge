@@ -12,7 +12,7 @@ import zipfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
-from . import brand as B, copywriter, intake as I, palette as P, texts as T
+from . import brand as B, capture as C, copywriter, intake as I, palette as P, texts as T
 from .engine import BANNERS, BG_PRESETS, DEVICES, FRAMES, PREVIEW_SIZES, STYLES, render_job, text_problems
 
 HERE = Path(__file__).resolve().parent
@@ -22,11 +22,15 @@ SLIDE_OVERRIDES = {"style", "frame", "text_position", "align", "bg_angle", "titl
                    "no_grain", "no_glow", "text_color", "accent", "glow", "deco", "frame_rim"}
 ASC_LOCALES = {"en": "en-US", "tr": "tr", "de": "de-DE", "fr": "fr-FR", "es": "es-ES", "it": "it", "pt": "pt-BR",
                "ja": "ja", "ko": "ko", "ru": "ru", "nl": "nl-NL", "ar": "ar-SA"}
-SHOT_PLATFORMS = ("ios", "ipad", "android", "android-tablet")
+PLAY_LOCALES = {"en": "en-US", "tr": "tr-TR", "de": "de-DE", "fr": "fr-FR", "es": "es-ES", "it": "it-IT", "pt": "pt-BR",
+                "ja": "ja-JP", "ko": "ko-KR", "ru": "ru-RU", "nl": "nl-NL", "ar": "ar"}
+PLAY_IMAGE_DIRS = {"android-phone": "phoneScreenshots", "android-tablet-7": "sevenInchScreenshots", "android-tablet-10": "tenInchScreenshots"}
+SHOT_PLATFORMS = C.SHOT_PLATFORMS
 # shots_by_set anahtarı: "<platform>/<dil>", ikisinden biri boş olabilir ("android/", "/tr")
 SET_KEY_RE = re.compile(r"(ios|ipad|android|android-tablet)?/([a-z]{2,3}(-[A-Za-z]{2,4})?)?")
 VIDEO_EXT = {".mp4", ".mov", ".m4v"}
 DEFAULT_TONE = "confident, friendly, benefit-first"
+VARIANT_ANGLES = ("the outcome the user gains", "the problem the app removes", "the concrete features that set it apart")
 
 
 # --------------------------------------------------------------------------- #
@@ -413,7 +417,7 @@ def cmd_plan(a, quiet=False) -> dict:
     if inp["template"] and inp["template"] not in templates:  # --template my.json
         templates[inp["template"]] = load_template(inp["template"])
     ctx = dict(app=inp["app"], about=inp["about"], tone=a.tone, langs=langs, templates=templates, profile=profile,
-               locked=inp["locked"], keywords=keywords,
+               locked=inp["locked"], keywords=keywords, variant=getattr(a, "variant", None),
                fixed=dict(colors=inp["colors"], count=inp["count"], template=inp["template"],
                           dimension=inp["dimension"], category=inp["category"]))
     if (inp["count"] or 0) > 10:
@@ -422,7 +426,10 @@ def cmd_plan(a, quiet=False) -> dict:
     if miss:
         print("Missing from your text (the AI will complete it): " + "; ".join(miss[:6]) + (" …" if len(miss) > 6 else ""))
     print(f"Preparing design decisions and copy ({', '.join(langs)}) …")
-    data, used = copywriter.plan(ctx, shots, backend=a.ai, model=a.model)
+    if getattr(a, "variant_slides", None):  # yalnızca tasarımı değişen varyant: metin aynı kalır, model çağrılmaz
+        data, used = copywriter.finalize({"slides": a.variant_slides}, ctx, list(shots)), "variant"
+    else:
+        data, used = copywriter.plan(ctx, shots, backend=a.ai, model=a.model)
     d = data["design"]
     out = dict(app=inp["app"], about=inp["about"], tone=a.tone, langs=langs, generated_with=used,
                design=d, shots={n: rel(p, copy_path.parent) for n, p in shots.items()}, slides=data["slides"])
@@ -594,13 +601,17 @@ def cmd_render(a, data: dict | None = None):
                 warnings += [(idx + 1, f"[{lang}] {m}") for m in text_problems(cfg, lang)]
                 slug = Path(s["shot"]).stem.lstrip("0123456789_- ") or "screen"
                 fname = f"{idx + 1:02d}_{slug}.{'jpg' if a.format == 'jpg' else 'png'}"
+                store, target = store_dir(dev).parts
                 if layout == "store":
-                    d = out / lang / store_dir(dev)
+                    path = out / lang / store / target / fname
+                elif layout == "fastlane":
+                    path = fastlane_shot(out, dev, lang, fname)
                 elif layout == "asc":
-                    d = out / ASC_LOCALES.get(lang, lang) / DEVICES[dev]["asc"]
+                    path = out / ASC_LOCALES.get(lang, lang) / DEVICES[dev]["asc"] / fname
                 else:
-                    d = out / lang
-                jobs.append(dict(cfg=cfg, locale=lang, idx=idx, total=len(slides), path=str(d / fname), fmt=a.format))
+                    path = out / lang / fname
+                jobs.append(dict(cfg=cfg, locale=lang, idx=idx, total=len(slides), path=str(path), fmt=a.format,
+                                 meta=dict(store=store, target=target)))
     for key in [] if only else banners:
         b = BANNERS[key]
         ns = argparse.Namespace(**{**vars(a), "device": b["device"]})
@@ -611,8 +622,11 @@ def cmd_render(a, data: dict | None = None):
                 cfg[k] = str(paths[slides[i % len(slides)]["shot"]])
             title, subtitle = banner_text(data, slides[0])
             cfg.update(banner=key, dimension=tpl.get("dimension"), title=title, subtitle=subtitle, icon=icon)
-            jobs.append(dict(cfg=cfg, locale=lang, idx=0, total=1, path=str(out / lang / b["store"] / b["folder"] / f"{key}.png"),
-                             fmt="png"))
+            path = out / lang / b["store"] / b["folder"] / f"{key}.png"
+            if layout == "fastlane":
+                path = fastlane_banner(out, b, lang, key)
+            jobs.append(dict(cfg=cfg, locale=lang, idx=0, total=1, path=str(path), fmt="png",
+                             meta=dict(store=b["store"], target=b["folder"], banner=key)))
     grouped: dict[str, list[int]] = {}
     for n, msg in warnings:
         grouped.setdefault(msg, [])
@@ -654,7 +668,8 @@ def cmd_render(a, data: dict | None = None):
             make_sheet(sorted(ps), out / "_review" / f"overview_{lang}.jpg")
     if a.brief:
         write_brief(out / "_review" / "claude-design-brief.md", data, tpl, langs, devices[0], colors)
-    a.render_state = dict(data=data, langs=langs, layout=layout, targets=targets, devices=devices, partial=bool(only))
+    a.render_state = dict(data=data, langs=langs, layout=layout, targets=targets, devices=devices, partial=bool(only),
+                          meta={j["path"]: j["meta"] for j in jobs})
     return paths_by_lang
 
 
@@ -662,6 +677,21 @@ def store_dir(device: str) -> Path:
     if device.startswith("android-"):
         return Path("google-play") / device.removeprefix("android-")
     return Path("app-store") / device
+
+
+def fastlane_shot(out: Path, device: str, lang: str, fname: str) -> Path:
+    """deliver tek dil klasörü bekler ve cihazı boyuttan anlar: ad cihazlar arasında çakışmamalı, sıra NN ile korunmalı.
+    asc adı dosya adında kalır; fastlane aynı boyutlu iPad nesillerini bununla ayırır."""
+    if device.startswith("android"):
+        return out / "fastlane" / "metadata" / "android" / PLAY_LOCALES.get(lang, lang) / "images" / PLAY_IMAGE_DIRS[device] / fname
+    return out / "fastlane" / "screenshots" / ASC_LOCALES.get(lang, lang) / f"{DEVICES[device]['asc']}_{device}_{fname}"
+
+
+def fastlane_banner(out: Path, banner: dict, lang: str, key: str) -> Path:
+    if banner["store"] == "google-play":
+        return out / "fastlane" / "metadata" / "android" / PLAY_LOCALES.get(lang, lang) / "images" / "featureGraphic.png"
+    # deliver ekran görüntüsü yüklüyor; başlık görselleri onun klasörüne girerse boyutu reddedilir
+    return out / "app-store-extra" / lang / banner["folder"] / f"{key}.png"
 
 
 def banner_text(data: dict, first_slide: dict) -> tuple:
@@ -712,7 +742,7 @@ def convert_previews(out: Path, previews: dict, langs: list[str], devices: list[
 def package_output(a, paths_by_lang: dict[str, list[str]]) -> dict:
     """Mağaza düzeninde manifest ve zip yazar. Zip yalnızca bu çalıştırmanın dosyalarını alır, eski dosyalar girmez."""
     st = a.render_state
-    if st["layout"] != "store" or st["partial"] or not st["targets"]:
+    if st["layout"] not in ("store", "fastlane") or st["partial"] or not st["targets"]:
         return {}
     from PIL import Image
     out = Path(a.out)
@@ -724,9 +754,10 @@ def package_output(a, paths_by_lang: dict[str, list[str]]) -> dict:
             with Image.open(p) as im:
                 w, h = im.size
             rp = Path(p).relative_to(out)
-            entry = dict(path=rp.as_posix(), lang=lang, store=rp.parts[1], target=rp.parts[2], width=w, height=h)
-            if rp.parts[2] in ("header-search", "feature-graphic"):
-                entry["works_with"] = BANNERS[Path(p).stem]["works_with"]
+            meta = st["meta"][p]
+            entry = dict(path=rp.as_posix(), lang=lang, store=meta["store"], target=meta["target"], width=w, height=h)
+            if meta.get("banner"):
+                entry["works_with"] = BANNERS[meta["banner"]]["works_with"]
             files.append(entry)
     for v in videos:
         rp = Path(v).relative_to(out)
@@ -748,15 +779,13 @@ def package_output(a, paths_by_lang: dict[str, list[str]]) -> dict:
         res["zip"] = str(zip_path)
         print(f"Zip: {zip_path}")
     if mode == "zip":
-        for lang in st["langs"]:
-            for f in files:
-                if f["lang"] == lang:
-                    (out / f["path"]).unlink(missing_ok=True)
-            for d in sorted((q for q in (out / lang).rglob("*") if q.is_dir()), key=lambda q: -len(q.parts)):
-                if not any(d.iterdir()):
-                    d.rmdir()
-            if (out / lang).is_dir() and not any((out / lang).iterdir()):
-                (out / lang).rmdir()
+        for f in files:
+            path = out / f["path"]
+            path.unlink(missing_ok=True)
+            for d in path.parents:  # boşalan klasörler; içinde başka dosya olan klasör kalır
+                if d == out or any(d.iterdir()):
+                    break
+                d.rmdir()
     else:
         print(f"Folder: {out}")
     return res
@@ -822,21 +851,37 @@ def write_brief(dest: Path, data: dict, tpl: dict, langs: list[str], device: str
 
 
 def cmd_create(a):
+    r = None
     if a.device:  # tek cihaz, eski düzen
-        a.langs, a.out, a.copy = a.langs or "en,tr", a.out or "out", a.copy or "shotforge.copy.json"
-        cmd_render(a, cmd_plan(a, quiet=False))
-        return
-    output = {True: "both", False: "folder", None: None}[a.zip]
-    answers = dict(store=a.store, header_sizes=a.header_sizes, langs=a.langs, devices=a.devices, previews=a.preview,
-                   output="zip" if a.zip_only else output)
-    if should_ask(a):
-        answers = ask_store_questions(a, answers)
-    try:
-        r = I.resolve(answers)
-    except ValueError as e:
-        raise SystemExit(str(e))
-    check_langs(r["langs"])
-    a.langs, a.previews = ",".join(r["langs"]), r["previews"]
+        a.langs = a.langs or "en,tr"
+    else:
+        output = {True: "both", False: "folder", None: None}[a.zip]
+        answers = dict(store=a.store, header_sizes=a.header_sizes, langs=a.langs, devices=a.devices, previews=a.preview,
+                       output="zip" if a.zip_only else output)
+        if should_ask(a):
+            answers = ask_store_questions(a, answers)
+        try:
+            r = I.resolve(answers)
+        except ValueError as e:
+            raise SystemExit(str(e))
+        check_langs(r["langs"])
+        a.langs, a.previews = ",".join(r["langs"]), r["previews"]
+    if a.maestro:
+        if len(a.shots) != 1:
+            raise SystemExit("--maestro writes screenshots into one folder; give a single folder as the input.")
+        run_capture(a.maestro, a.langs, a.shots[0], a.capture_platform, a.capture_device)
+    if a.variants > 1:
+        create_variants(a, r)
+    else:
+        create_one(a, r)
+
+
+def create_one(a, r) -> dict:
+    if a.device:
+        a.out, a.copy = a.out or "out", a.copy or "shotforge.copy.json"
+        data = cmd_plan(a, quiet=False)
+        cmd_render(a, data)
+        return data
     app = a.app or (read_copy(Path(a.copy)).get("app") if a.copy and Path(a.copy).exists() else None)
     a.out = a.out or str(Path("shotforge-out") / I.slug(app))
     Path(a.out).mkdir(parents=True, exist_ok=True)
@@ -845,11 +890,74 @@ def cmd_create(a):
     data["targets"] = r["targets"]
     write_copy(Path(a.copy), data)
     render_and_package(a, data)
+    return data
+
+
+def next_template(used: set[str], first: dict, i: int, a, profile: dict) -> str:
+    """Tasarım varyantı için kullanılmamış şablon. Boyut serbestse B, 2D/3D farkını da dener."""
+    pool = {n: t for n, t in list_templates().items() if n not in used}
+    dim = first["dimension"]
+    if a.dimension in (None, "auto") and i % 2:
+        dim = "2d" if dim == "3d" else "3d"
+    return P.choose_template(pool, dimension=dim, category=first.get("category"),
+                             bg_hex=(first.get("colors") or {}).get("background"), profile=profile, tone=a.tone or "")[0]
+
+
+def create_variants(a, r):
+    """Her varyant kendi klasöründe tam bir çıktıdır: render, manifest, zip ve fastlane ağacı ayrı çalışır."""
+    if not a.app:
+        raise SystemExit("App name required with --variants: --app \"Name\".")
+    if should_ask(a):
+        print("Design questions are skipped with --variants; pass colours and the template as flags.")
+    a.ask, a.no_ask = False, True
+    root = Path(a.out or Path("shotforge-out") / I.slug(a.app))
+    by = a.variant_by
+    results: list[dict] = []
+    for i in range(a.variants):
+        letter = "abc"[i]
+        ns = argparse.Namespace(**vars(a))
+        ns.out = str(root / f"variant-{letter}")
+        if a.copy:
+            ns.copy = str(Path(a.copy).with_suffix(f".{letter}{Path(a.copy).suffix}"))
+        if by != "design":
+            ns.variant = dict(letter=letter, total=a.variants, angle=VARIANT_ANGLES[i])
+        if i:
+            first = results[0]["design"]
+            if by == "copy":
+                ns.template = first["template"]
+            else:
+                profile = P.analyze_shots(list(scan_shots(a.shots, a.langs.split(","))[0].values()))
+                ns.template = next_template({d["design"]["template"] for d in results}, first, i, a, profile)
+            ns.dimension = "auto"
+            if by != "both":  # tek fark test edilsin: diğer yarı A'dan kalır
+                c = first.get("colors") or {}
+                ns.bg_color, ns.text_color, ns.accent = c.get("background"), c.get("text"), c.get("accent")
+            if by == "design":
+                ns.variant_slides, ns.count = results[0]["slides"], str(len(results[0]["slides"]))
+        print(f"\n── Variant {letter.upper()} ─────────────────────────────────────────────")
+        results.append(create_one(ns, r))
+    titles = [[s.get("title") for s in d["slides"]] for d in results]
+    if by != "design" and any(t == titles[0] for t in titles[1:]):
+        print("WARNING: some variants have the same headlines (placeholder copy, or text you fixed); "
+              "only an AI backend writes different angles.", file=sys.stderr)
+    print(f"\n{a.variants} variants: " + ", ".join(str(root / f"variant-{l}") for l in "abc"[:a.variants]))
 
 
 # --------------------------------------------------------------------------- #
 # Diğer komutlar
 # --------------------------------------------------------------------------- #
+def run_capture(flows, langs: str, out, platform, device, timeout=C.DEFAULT_TIMEOUT):
+    langs = [l.strip() for l in langs.split(",") if l.strip()]
+    check_langs(langs)
+    for w in C.capture(flows, langs, out, platform, device, timeout):
+        print(f"WARNING: {w}", file=sys.stderr)
+
+
+def cmd_capture(a):
+    run_capture(a.flows, a.langs, a.out, a.platform, a.device, a.timeout)
+    print(f"Next: shotforge create {a.out} --app \"Name\" --langs {a.langs}")
+
+
 def cmd_templates(a):
     t = list_templates()
     if a.show:
@@ -920,6 +1028,10 @@ def cmd_doctor(_):
     except ImportError:
         sdk = "not installed (optional: pip install openai)"
     print(f"{ok(os.environ.get('OPENAI_API_KEY'))} OpenAI       {'OPENAI_API_KEY set' if os.environ.get('OPENAI_API_KEY') else 'OPENAI_API_KEY not set'}; SDK {sdk} (only with --ai openai)")
+    m = shutil.which("maestro")
+    print(f"{ok(m)} maestro      {'found' if m else 'missing (only needed for capture)'}")
+    booted = C.booted_devices()
+    print(f"{ok(booted)} devices      {', '.join(booted) if booted else 'no booted simulator or emulator (only needed for capture)'}")
     fonts = list((HERE / "fonts").glob("Inter-*.otf"))
     print(f"{ok(len(fonts) >= 4)} Inter fonts ({len(fonts)} files)")
     print(f"\n--ai auto selects this backend: {'claude' if c else ('api' if os.environ.get('ANTHROPIC_API_KEY') else 'offline')}")
@@ -976,8 +1088,9 @@ def add_render_args(p):
     p.add_argument("-o", "--out", default="out")
     p.add_argument("--device", default=None, choices=DEVICES,
                    help="one device (old layout); otherwise the store targets are used, or iphone-6.9 without them")
-    p.add_argument("--layout", default=None, choices=["flat", "asc", "store"],
-                   help="store: out/<lang>/<store>/<target>/… | flat: out/<lang>/NN_name.png | asc: out/<lang>/<DISPLAY_TYPE>/NN_name.png")
+    p.add_argument("--layout", default=None, choices=["flat", "asc", "store", "fastlane"],
+                   help="store: out/<lang>/<store>/<target>/… | flat: out/<lang>/NN_name.png | asc: out/<lang>/<DISPLAY_TYPE>/NN_name.png | "
+                        "fastlane: out/fastlane/screenshots/<locale>/… and out/fastlane/metadata/android/<locale>/images/…")
     p.add_argument("--icon", default=None, metavar="FILE", help="app icon for the header and feature graphic")
     p.add_argument("--format", default="png", choices=["png", "jpg"])
     p.add_argument("--jobs", type=int, default=max(1, min(3, os.cpu_count() or 1)), help="number of parallel processes")
@@ -1041,7 +1154,24 @@ def main(argv=None):
                    help="screen recording to convert to an App Preview; without a language it applies to all (repeatable)")
     g.add_argument("--zip", action=argparse.BooleanOptionalAction, default=None, help="also create a zip (default: yes)")
     g.add_argument("--zip-only", action="store_true", help="keep the images only inside the zip")
+    g = c.add_argument_group("store tests")
+    g.add_argument("--variants", type=int, default=1, choices=[1, 2, 3], help="write 2 or 3 complete sets to <out>/variant-a, variant-b, …")
+    g.add_argument("--variant-by", default="both", choices=["copy", "design", "both"],
+                   help="what differs between variants; design uses a different template, also when --template sets variant A's")
+    g = c.add_argument_group("capture screenshots first")
+    g.add_argument("--maestro", default=None, metavar="FLOWS", help="run these Maestro flows per language and write into the input folder")
+    g.add_argument("--capture-platform", default=None, choices=C.SHOT_PLATFORMS, help="write to <folder>/<platform>/<lang>/ instead of <folder>/<lang>/")
+    g.add_argument("--capture-device", default=None, metavar="ID", help="device ID for Maestro (default: its own choice)")
     c.set_defaults(fn=cmd_create, langs=None, out=None, copy=None)
+
+    cp = sub.add_parser("capture", help="take screenshots per language by running your Maestro flows on a booted device")
+    cp.add_argument("--flows", required=True, help="Maestro flow file or folder; flows use takeScreenshot and the ${LANG} variable")
+    cp.add_argument("--langs", default="en,tr", help="comma-separated languages (default: en,tr)")
+    cp.add_argument("--platform", default=None, choices=C.SHOT_PLATFORMS, help="write to <out>/<platform>/<lang>/ instead of <out>/<lang>/")
+    cp.add_argument("--device", default=None, metavar="ID", help="device ID for Maestro")
+    cp.add_argument("--timeout", type=int, default=C.DEFAULT_TIMEOUT, help="seconds per language")
+    cp.add_argument("-o", "--out", default="shots")
+    cp.set_defaults(fn=cmd_capture)
 
     pl = sub.add_parser("plan", help="create only the design decisions and copy (shotforge.copy.json)")
     pl.add_argument("shots", nargs="+")

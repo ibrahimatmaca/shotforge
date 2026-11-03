@@ -181,7 +181,7 @@ def keyword_gaps(slides: list[dict], keywords: list[str]) -> list[str]:
     """Hiçbir slaytta, hiçbir dilde geçmeyen anahtar kelimeler. Yerel karşılık kullanılmışsa burada eksik görünür."""
     text = " ".join(str(x) for s in slides for key in ("title", "subtitle") for x in (s.get(key) or {}).values())
     text = " ".join(text.replace("*", "").casefold().split())
-    return [k for k in keywords if k.casefold() not in text]
+    return [k for k in keywords if not re.search(rf"(?<!\w){re.escape(k.casefold())}(?!\w)", text)]
 
 
 def build_prompt(ctx, shots, shot_paths=None, claude_mode=False) -> str:

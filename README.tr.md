@@ -25,6 +25,11 @@ her dilde başlık metinlerini yazar. Bunların herhangi birini siz de belirleye
 - **Başlamadan sorar.** Slash komutu, MCP araçları ve terminal aynı soru listesini kullanır; boş bırakılan alan varsayılan alır, renkler ekran görüntülerinizden gelir.
 - Tek çalıştırmada **App Store ve Google Play**: telefon ve tablet boyutları, App Store Header and Search Results görselleri, Play feature graphic.
 - Tek komutta **çok dilli** çıktı (`--langs en,tr,de`): her dile bir klasör ve zip, isteğe bağlı dile özel ekran görüntüleri, **App Preview** video dönüştürücü.
+- **Marka dosyası:** `shotforge.toml` renk, font, logo ve tonu tutar; her çalıştırma ve her uygulama aynı görünür.
+- **Maestro ile çekim:** `shotforge capture` akışlarınızı açık cihazda dil başına çalıştırır ve shotforge'un okuduğu ekran görüntülerini yazar.
+- **Mağaza testleri:** `--variants 2`, metni, tasarımı veya ikisi birden farklı tam setler yazar; Custom Product Pages ve Play deneylerine hazırdır.
+- **fastlane klasörleri:** `--layout fastlane`, `deliver` ve `supply` araçlarının yüklediği ağacı yazar. shotforge kendisi bir şey yüklemez.
+- **ASO metni:** `--keywords`, başlıklara hangi arama terimlerinin işleneceğini AI'a söyler.
 - **Okunaklılık:** okunaksız yazı rengi slayt başına düzeltilir (başlıklar için kontrast ≥ 3:1) ve raporlanır.
 
 ## Kurulum
@@ -191,6 +196,89 @@ shotforge install-claude --global      # ~/.claude/commands/store-shots.md
 ```
 
 `/store-shots ./ekranlar "Habita" "alışkanlık takibi"`: yukarıdaki soruları başlamadan sorar, `shotforge create`'i çalıştırır, önizlemeleri açıp sorunları düzeltir.
+
+## Marka dosyası
+
+Projenize `shotforge.toml` koyun (bkz. [`examples/shotforge.toml`](examples/shotforge.toml)). `create`, `plan` ve `render` bu dosyayı bulunduğunuz klasörde veya üst klasörlerde, depo köküne kadar arar;
+`--brand DOSYA` başka bir dosya seçer, `--no-brand` yok sayar. Bayraklar dosyanın, dosya da AI'ın önüne geçer.
+
+```toml
+[brand]
+tone = "sakin, net, fayda odaklı"
+template = "bubble"
+langs = ["en", "tr"]
+font = "assets/Brand-Bold.otf"     # bu dosyaya göre yol, klasörünün dışına çıkamaz
+logo = "assets/logo.png"           # başlığın yanındaki boş bantta küçük; --icon yoksa başlık görseli ikonu
+
+[brand.colors]
+background = "#6D28D9"
+text = "#FFFFFF"
+accent = "#FDE047"
+```
+
+`render` tasarımı copy dosyasından alır, marka dosyasından yalnızca `font` ve `logo` kullanır. Elle düzenlenmiş renkleri değiştirmek için render bayraklarını kullanın.
+
+## Anahtar kelimeler
+
+```bash
+shotforge create ./ekranlar --app Habita --keywords "alışkanlık takibi,günlük rutin"
+```
+
+AI terimleri doğal okunduğu yerlerde ve uzunluk sınırları içinde kullanır; shotforge birebir bulunamayanları listeler (yerel bir karşılık kullanılmış olabilir). Offline mod yer tutucu metin yazar, terimleri kullanamaz.
+Apple, ekran görüntüsü metnini arama sıralaması etkeni olarak belgelemez; App Store anahtar kelime alanını doldurmaya devam edin, bunu başlıkları aranan terimlerle eşleştirmek olarak görün. Google Play rehberi görsellerde "Best", "#1", "Free" gibi kelimeleri önermez; shotforge bunlarda uyarır.
+
+## Mağaza testi varyantları
+
+```bash
+shotforge create ./ekranlar --app Habita --variants 3 --variant-by both -o out
+# out/variant-a/, out/variant-b/, out/variant-c/  — her birinin kendi copy dosyası, manifest'i, zip'i ve görselleri olur
+```
+
+`--variant-by copy`, A varyantının tasarımını korur ve her varyanta başka bir mesaj açısı verir. `design`, A'nın metnini ve renklerini korur, başka şablon kullanır ve `--dimension` vermediyseniz B'de 2D/3D'nin diğerini dener; ek AI çağrısı yapılmaz. `both` (varsayılan) ikisini de değiştirir.
+`--template` yalnızca A'yı belirler. Farklı metin için AI gerekir: offline çalıştırma başlıkların aynı olduğunu söyler. `--variants` ile tasarım soruları sorulmaz, seçimleri bayrakla verin. Her klasörü ayrı bir Custom Product Page veya Play deneyi olarak yükleyin.
+
+## Maestro ile çekim
+
+```bash
+shotforge capture --flows .maestro/shots --langs en,tr --platform ios -o shots
+shotforge create shots --app Habita --langs en,tr
+# veya ikisi birden:
+shotforge create shots --maestro .maestro/shots --capture-platform ios --app Habita --langs en,tr
+```
+
+shotforge her dil için bir kez `maestro test -e LANG=<dil>` çalıştırır ve PNG'leri `shots/ios/<dil>/` altına taşır. Cihaz açmaz, uygulama kurmaz, cihaz dilini değiştirmez: akış, açık cihazda kurulu olan build'i sürer; uygulamayı `${LANG}` dilinde açmak akışın işidir. iOS örneği:
+
+```yaml
+appId: com.example.habita
+---
+- launchApp:
+    clearState: true
+    arguments:
+      AppleLanguages: "(${LANG})"
+- takeScreenshot: 01_home
+- tapOn: {id: "stats"}
+- takeScreenshot: 02_stats
+```
+
+Her dilde aynı görüntü adlarını kullanın, sırayı numarayla belirleyin. shotforge eksik adlarda ve kırpılacak ekran oranlarında uyarır. Ekranlar olduğu gibi yayımlanacağı için test verisi kullanın.
+`shotforge doctor`, Maestro'nun ve açık cihazın durumunu gösterir.
+
+## fastlane
+
+```bash
+shotforge create ./ekranlar --app Habita --layout fastlane -o store
+fastlane deliver --screenshots_path store/fastlane/screenshots --skip_binary_upload --skip_metadata --overwrite_screenshots
+fastlane supply --metadata_path store/fastlane/metadata/android --skip_upload_apk --skip_upload_aab --skip_upload_metadata --skip_upload_changelogs
+```
+
+```
+store/fastlane/screenshots/en-US/APP_IPHONE_67_iphone-6.9_01_home.png        # deliver cihazı görsel boyutundan anlar
+store/fastlane/metadata/android/en-US/images/phoneScreenshots/01_home.png    # ayrıca sevenInchScreenshots, tenInchScreenshots
+store/fastlane/metadata/android/en-US/images/featureGraphic.png
+store/app-store-extra/en/header-search/5244x2950.png                         # deliver bunları yüklemez
+```
+
+Dil kodları mağaza yerel ayarına çevrilir (`en → en-US`; `tr`, Apple'da `tr`, Play'de `tr-TR`). Yeni bir cihaz boyutunu fastlane sürümünüzle kontrol edin; iki araç da mağazalarla birlikte değişir.
 
 ## App Store Connect
 
