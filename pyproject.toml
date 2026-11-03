@@ -1,23 +1,23 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "shotforge"
-version = "0.4.0"
+version = "0.5.0"
 description = "App Store and Google Play image generator CLI + MCP server: asks first, then Claude decides colours, 2D/3D template and copy; separate store-ready images per page and language, plus a zip."
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE", "shotforge/fonts/LICENSE-Inter.txt"]
 requires-python = ">=3.10"
 keywords = ["app store", "screenshots", "aso", "claude", "mcp", "mockup", "app preview"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Environment :: Console",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Topic :: Multimedia :: Graphics",
 ]
-dependencies = ["pillow>=10", "numpy"]
+dependencies = ["pillow>=10.3", "numpy>=1.26"]
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.2"]
@@ -34,10 +34,12 @@ shotforge = "shotforge.cli:main"
 shotforge-mcp = "shotforge.mcp_server:main"
 
 [tool.setuptools]
-packages = ["shotforge"]
+packages = ["shotforge", "shotforge.data", "shotforge.fonts", "shotforge.templates"]
 
 [tool.setuptools.package-data]
-shotforge = ["templates/*.json", "fonts/*", "data/*"]
+"shotforge.data" = ["*"]
+"shotforge.fonts" = ["*"]
+"shotforge.templates" = ["*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

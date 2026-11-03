@@ -26,7 +26,7 @@ def test_store_choice_limits_targets():
 
 def test_play_note_is_a_recommendation_not_a_ban():
     note = next(n for n in I.resolve(dict(store="both"))["notes"] if "Google Play" in n)
-    assert "zorunlu kurala aykırı değil" in note
+    assert "don't break a hard rule" in note
 
 
 @pytest.mark.parametrize("answers", [dict(store="windows"), dict(header_sizes="100x100"), dict(devices="pixel"), dict(output="tar")])
@@ -94,10 +94,10 @@ def test_interactive_skips_header_question_for_play(monkeypatch, shots_dir, tmp_
 
     def fake_input(prompt=""):
         prompts.append(prompt)
-        return "playstore" if "mağaza" in prompt else ""
+        return "playstore" if "Which store" in prompt else ""
     monkeypatch.setattr(builtins, "input", fake_input)
     cli.main(["create", str(shots_dir), "--app", "Demo", "--ai", "offline", "--ask", "--count", "1", "--jobs", "1",
               "--langs", "en", "-o", str(tmp_path / "o")])
-    assert any("mağaza" in p for p in prompts) and not any("Header" in p and "üretilsin" in p for p in prompts)
+    assert any("Which store" in p for p in prompts) and not any("Header" in p and "Create" in p for p in prompts)
     assert (tmp_path / "o" / "en" / "google-play" / "phone" / "01_home.png").exists()
     assert not (tmp_path / "o" / "en" / "app-store").exists()

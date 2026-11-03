@@ -24,7 +24,7 @@ DEVICES = {
     "ipad-13": dict(size=(2064, 2752), kind="tablet", asc="APP_IPAD_PRO_3GEN_129", label='iPad 13"'),
     "ipad-12.9": dict(size=(2048, 2732), kind="tablet", asc="APP_IPAD_PRO_3GEN_129", label='iPad Pro 12.9"'),
     # Google Play: tuval 9:16, cihazın ekranı daha uzun (screen_aspect); çerçevede iPhone adası yok
-    "android-phone": dict(size=(1080, 1920), kind="phone", asc="ANDROID_PHONE", label="Google Play telefon",
+    "android-phone": dict(size=(1080, 1920), kind="phone", asc="ANDROID_PHONE", label="Google Play phone",
                           screen_aspect=20 / 9, island=False),
     "android-tablet-7": dict(size=(1440, 2560), kind="tablet", asc="ANDROID_TABLET_7", label='Google Play 7" tablet',
                              screen_aspect=16 / 10, island=False),
@@ -116,7 +116,7 @@ def resolve_frame(f: str):
     if re.fullmatch(r"#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?", f.strip()):
         c = hex2rgb(f)
         return (c, tuple(int(v * 0.86) for v in c))
-    raise SystemExit(f"Bilinmeyen çerçeve rengi: {f} ({', '.join(FRAMES)} ya da #hex)")
+    raise SystemExit(f"Unknown frame colour: {f} ({', '.join(FRAMES)} or #hex)")
 
 
 def rr_mask(size, box, radius, ss=3) -> Image.Image:
@@ -141,7 +141,7 @@ def parse_bg(spec: str, angle: float | None):
         return [avg], 0, im
     cols = [hex2rgb(c) for c in spec.split(",") if c.strip()]
     if not cols:
-        raise SystemExit(f"Geçersiz bg: {spec}")
+        raise SystemExit(f"Invalid bg: {spec}")
     if len(cols) == 1:
         cols = [cols[0], cols[0]]
     return cols, (angle if angle is not None else 160), None
@@ -197,7 +197,7 @@ def resolve_font(weight: str, user_font: str | None) -> str:
     for c in cands:
         if c.exists():
             return str(c)
-    raise SystemExit("Font bulunamadı. font ile bir .ttf/.otf yolu verin.")
+    raise SystemExit("No font found. Pass a .ttf/.otf path with --font.")
 
 
 def parse_markup(text: str):
@@ -579,11 +579,11 @@ def text_problems(cfg: dict, locale: str | None) -> list[str]:
         notdef = bytes(font.getmask("\U000F0000"))  # özel kullanım alanı: fontun "eksik karakter" şekli
         missing |= {c for c in text if not c.isspace() and c != "*" and bytes(font.getmask(c)) == notdef}
     if missing:
-        problems.append(f"fontta olmayan karakterler ({''.join(sorted(missing)[:8])}); --font ile uygun bir font verin.")
+        problems.append(f"characters missing from the font ({''.join(sorted(missing)[:8])}); pass a suitable font with --font.")
     tb = TextBlock(title, subtitle, cw, ch, fp_t, fp_s, (0, 0, 0, 255), (0, 0, 0), cfg.get("align", "center"),
                    float(cfg.get("title_scale", 1.0)))
     if any(w > cw - 2 * tb.margin for p in tb.parts for _, w in p["lines"]):
-        problems.append("metin en küçük boyutta bile taşıyor; kısaltın veya boşlukla bölün.")
+        problems.append("text overflows even at the minimum size; shorten it or add spaces.")
     return problems
 
 

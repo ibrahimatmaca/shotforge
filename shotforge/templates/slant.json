@@ -7,7 +7,7 @@
     "entertainment",
     "productivity"
   ],
-  "description": "2D · koyu zemin, sola dayalı başlık, kalın vurgu çerçeveli telefon düzlem içinde eğik, sağdan taşar.",
+  "description": "2D · dark background, left-aligned headline, phone with a thick accent rim rotated in the plane, bleeding off the right.",
   "design_notes": "Social/community dark theme. Dark background from the main colour. Left-aligned bold white headline whose key words are in the accent colour. The phone has a thick rim in the accent colour, is rotated about 14 degrees counter-clockwise in the plane and bleeds off the right/bottom edge, giving a dynamic, divided-frame feel (no perspective).",
   "palette": {
     "background": "#171F3D",

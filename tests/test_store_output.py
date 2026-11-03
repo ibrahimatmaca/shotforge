@@ -87,7 +87,7 @@ def test_play_is_capped_at_eight_pages(shots_dir, tmp_path):
                                only=None, sheet=False, brief=False, shots=[], template=None, bg_color=None, text_color=None,
                                accent=None, langs="en")
     paths = cli.cmd_render(a, d)
-    assert len(paths["en"]) == 8 and any("en fazla 8" in w for w in a.warnings)
+    assert len(paths["en"]) == 8 and any("at most 8" in w for w in a.warnings)
 
 
 def test_zip_only_leaves_no_language_folders(shots_dir, tmp_path):
@@ -141,7 +141,7 @@ def test_language_and_platform_folders_are_used(tmp_path):
     assert cli.shots_for("iphone-6.9", "de", base, sets, notes)["01_a.png"].parent.name == "en"
     assert any("[de]" in n for n in notes)
     cli.shots_for("android-phone", "en", base, sets, notes)
-    assert any("Android ekran görüntüsü yok" in n for n in notes)
+    assert any("no Android screenshots" in n for n in notes)
 
     out = tmp_path / "o"
     run("create", root, "--app", "D", "--ai", "offline", "--no-ask", "--count", 1, "--langs", "en,tr", "--store", "appstore",
@@ -164,10 +164,10 @@ def test_previews_warn_instead_of_failing(tmp_path, monkeypatch):
     monkeypatch.setattr(cli.shutil, "which", lambda _: "/bin/x")
     warnings.clear()
     assert cli.convert_previews(tmp_path, {"*": "/etc/hosts"}, ["en"], ["iphone-6.9"], warnings) == []
-    assert "atlandı" in warnings[0]
+    assert "skipped" in warnings[0]
 
 
-@pytest.mark.skipif(not (shutil.which("ffmpeg") and shutil.which("ffprobe")), reason="ffmpeg yok")
+@pytest.mark.skipif(not (shutil.which("ffmpeg") and shutil.which("ffprobe")), reason="ffmpeg is not installed")
 def test_preview_conversion_goes_to_language_folder(tmp_path):
     src = tmp_path / "rec.mp4"
     cli.subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=blue:s=320x640:d=16", str(src)], check=True)

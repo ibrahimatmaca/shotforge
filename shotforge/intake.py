@@ -33,38 +33,38 @@ _STORE_ALIASES = {
 }
 
 QUESTIONS = [
-    dict(id="app", question="Uygulamanın adı ne?", kind="text", required=True),
-    dict(id="about", question="Uygulama ne yapar? (1–2 cümle)", kind="text", default="ekranlardan çıkarılır"),
-    dict(id="store", question="Görseller hangi mağaza için üretilsin?", kind="choice",
+    dict(id="app", question="What is the app called?", kind="text", required=True),
+    dict(id="about", question="What does the app do? (1–2 sentences)", kind="text", default="inferred from the screens"),
+    dict(id="store", question="Which store should the images be for?", kind="choice",
          options=["appstore", "playstore", "both"], default="both"),
-    dict(id="header_sizes", question="App Store Header and Search Results görselleri üretilsin mi? Hangi boyutlarda?",
-         kind="multi", options=[*HEADER_SIZES, "no"], default="hepsi", when="store includes appstore",
-         note="5244x2950 (16:9, PNG) header ve aramada çalışır; 3840x2560 ve 1920x1280 (3:2) yalnızca aramada."),
-    dict(id="langs", question="App Preview ve ekran görüntüleri hangi dillerde oluşturulsun? Birden fazla seçilebilir.",
+    dict(id="header_sizes", question="Create App Store Header and Search Results images? In which sizes?",
+         kind="multi", options=[*HEADER_SIZES, "no"], default="all", when="store includes appstore",
+         note="5244x2950 (16:9, PNG) works for the header and search; 3840x2560 and 1920x1280 (3:2) only for search."),
+    dict(id="langs", question="Which languages should the App Preview and screenshots use? You can choose several.",
          kind="multi", options=["en", "tr", "de", "fr"], default="en,tr",
-         note="Başka bir dil kodu da yazılabilir (ör. pt-BR). ja, ko, ar için fontun karşılığı yok; Arapça sağdan sola dizilmez."),
-    dict(id="dimension", question="Şablon ailesi 2D mi 3D mi?", kind="choice", options=["2d", "3d", "auto"], default="auto"),
-    dict(id="template", question="Belirli bir şablon ister misiniz?", kind="template", default="kurallar seçer"),
-    dict(id="appstore_devices", question="App Store için hangi cihaz boyutları üretilsin?", kind="multi", answer_field="devices",
+         note="Other language codes work too (e.g. pt-BR). The font has no glyphs for ja, ko or ar; Arabic is not laid out right to left."),
+    dict(id="dimension", question="Should the template family be 2D or 3D?", kind="choice", options=["2d", "3d", "auto"], default="auto"),
+    dict(id="template", question="Do you want a specific template?", kind="template", default="the rules choose"),
+    dict(id="appstore_devices", question="Which device sizes for the App Store?", kind="multi", answer_field="devices",
          options=["iphone-6.9", "iphone-6.5", "ipad-13"], default="iphone-6.9", when="store includes appstore"),
-    dict(id="play_devices", question="Google Play için hangi cihaz boyutları üretilsin?", kind="multi", answer_field="devices",
+    dict(id="play_devices", question="Which device sizes for Google Play?", kind="multi", answer_field="devices",
          options=list(PLAY_DEVICES), default="android-phone", when="store includes playstore"),
-    dict(id="shot_sets", question="Dile veya platforma göre ayrı ekran görüntüleriniz var mı?", kind="info",
-         when="klasörde algılanmadıysa", default="tek set, uyarıyla",
-         note="Klasör düzeni: <klasör>/tr/…, <klasör>/android/…, <klasör>/android/tr/…, ipad/…, android-tablet/… (dosya adları aynı olmalı)."),
-    dict(id="count", question="Kaç sayfa (slayt) üretilsin? 1–10", kind="number", default="6–7",
-         note="Google Play cihaz türü başına en fazla 8 görsel alır."),
-    dict(id="texts", question="Başlık metinlerini kim yazsın?", kind="choice", options=["claude", "ben", "dosya"], default="claude"),
-    dict(id="tone", question="Metin tonu nasıl olsun?", kind="text", default="confident, friendly, benefit-first"),
-    dict(id="background_color", question="Ana arka plan rengi (#hex)", kind="color", default="ekran görüntülerinden"),
-    dict(id="text_color", question="Yazı rengi (#hex)", kind="color", default="okunaklı renk otomatik seçilir"),
-    dict(id="accent_color", question="Vurgu rengi (#hex)", kind="color", default="ekran görüntülerinden veya otomatik"),
-    dict(id="icon", question="Header ve feature graphic için uygulama ikonu dosyası?", kind="path", default="yok, yalnızca metin"),
-    dict(id="previews", question="App Preview için ekran kaydınız var mı? (ortak veya dil başına)", kind="path",
-         default="atlanır", when="store includes appstore",
-         note="Yalnızca verilen kayıt dönüştürülür ve ffmpeg gerekir. Google Play video dosyası değil YouTube bağlantısı alır."),
-    dict(id="out", question="Çıktı nereye yazılsın?", kind="path", default="./shotforge-out/<uygulama>"),
-    dict(id="output", question="Çıktı klasör mü, zip mi, ikisi mi?", kind="choice", options=list(OUTPUT_MODES), default="both"),
+    dict(id="shot_sets", question="Do you have separate screenshots per language or platform?", kind="info",
+         when="not detected in the folder", default="one set, with a warning",
+         note="Folder layout: <folder>/tr/…, <folder>/android/…, <folder>/android/tr/…, ipad/…, android-tablet/… (file names must match)."),
+    dict(id="count", question="How many pages (slides)? 1–10", kind="number", default="6–7",
+         note="Google Play takes at most 8 images per device type."),
+    dict(id="texts", question="Who should write the headlines?", kind="choice", options=["ai", "me", "file"], default="ai"),
+    dict(id="tone", question="What tone should the copy have?", kind="text", default="confident, friendly, benefit-first"),
+    dict(id="background_color", question="Main background colour (#hex)", kind="color", default="from the screenshots"),
+    dict(id="text_color", question="Text colour (#hex)", kind="color", default="a readable colour is chosen automatically"),
+    dict(id="accent_color", question="Accent colour (#hex)", kind="color", default="from the screenshots or automatic"),
+    dict(id="icon", question="App icon file for the header and feature graphic?", kind="path", default="none, text only"),
+    dict(id="previews", question="Do you have a screen recording for the App Preview? (shared or per language)", kind="path",
+         default="skipped", when="store includes appstore",
+         note="Only a recording you provide is converted, and it needs ffmpeg. Google Play takes a YouTube link, not a video file."),
+    dict(id="out", question="Where should the output go?", kind="path", default="./shotforge-out/<app>"),
+    dict(id="output", question="Output as a folder, a zip, or both?", kind="choice", options=list(OUTPUT_MODES), default="both"),
 ]
 
 
@@ -166,14 +166,14 @@ def resolve(answers: dict | None) -> dict:
 def notes_for(stores, devices, langs) -> list[str]:
     notes = []
     if "playstore" in stores:
-        notes.append("Google Play: çerçeve ve ek metin zorunlu kurala aykırı değil, ama yönerge cihaz görseli kullanmamayı, "
-                     "sloganın görselin %20'sini geçmemesini ve 'Best', '#1', 'Free', 'Download now' gibi ifadelerden "
-                     "kaçınmayı öneriyor. Yönergeye uymayan görseller öneri alanlarında görünmeyebilir.")
+        notes.append("Google Play: device frames and extra text don't break a hard rule, but the guidelines recommend no device images, "
+                     "a slogan under 20% of the image, and avoiding phrases like 'Best', '#1', 'Free' and 'Download now'. "
+                     "Images that don't follow them may not appear in recommended placements.")
     no_glyph = [l for l in langs if l.split("-")[0] in NO_GLYPH_LANGS]
     if no_glyph:
-        notes.append(f"{', '.join(no_glyph)}: Inter fontunda bu yazının karakterleri yok; uygun bir font (--font) gerekir.")
+        notes.append(f"{', '.join(no_glyph)}: the Inter font has no characters for this script; a suitable font (--font) is needed.")
     if any(l.split("-")[0] in ("ar", "he") for l in langs):
-        notes.append("Sağdan sola yazan diller doğru dizilmez; çıktıyı elle kontrol edin.")
+        notes.append("Right-to-left languages are not laid out correctly; check the output by hand.")
     return notes
 
 

@@ -181,37 +181,37 @@ def validate(data: dict, ctx, shots: list[str]) -> list[str]:
     langs = ctx["langs"]
     slides = data.get("slides")
     if not isinstance(slides, list) or not slides:
-        return ["'slides' listesi yok"]
+        return ["'slides' list is missing"]
     want = ctx["fixed"].get("count")
     if want and len(slides) != want:
-        probs.append(f"{want} slayt bekleniyordu, {len(slides)} geldi")
+        probs.append(f"expected {want} slides, got {len(slides)}")
     if not want and not (1 <= len(slides) <= 10):
-        probs.append(f"slayt sayısı 1-10 olmalı ({len(slides)})")
+        probs.append(f"slide count must be 1-10 ({len(slides)})")
     used = set()
     for i, s in enumerate(slides, 1):
         if s.get("shot") not in shots:
-            probs.append(f"slayt {i}: bilinmeyen shot '{s.get('shot')}'")
+            probs.append(f"slide {i}: unknown shot '{s.get('shot')}'")
         else:
             used.add(s["shot"])
         for key in ("title", "subtitle"):
             v = s.get(key)
             if not isinstance(v, dict):
-                probs.append(f"slayt {i}: {key} bir sözlük olmalı")
+                probs.append(f"slide {i}: {key} must be an object")
             elif key == "title":
-                probs += [f"slayt {i}: title.{l} boş" for l in langs if not str(v.get(l, "")).strip()]
+                probs += [f"slide {i}: title.{l} is empty" for l in langs if not str(v.get(l, "")).strip()]
     missing = [s for s in shots if s not in used]
     if missing and len(slides) >= len(shots):
-        probs.append("kullanılmayan ekran görüntüleri: " + ", ".join(missing))
+        probs.append("unused screenshots: " + ", ".join(missing))
     d = data.get("design")
     if not isinstance(d, dict):
-        probs.append("'design' bloğu yok")
+        probs.append("'design' block is missing")
     else:
         t = d.get("template")
         if t and t not in ctx["templates"]:
-            probs.append(f"bilinmeyen şablon '{t}' (seçenekler: {', '.join(ctx['templates'])})")
+            probs.append(f"unknown template '{t}' (options: {', '.join(ctx['templates'])})")
         for k, v in (d.get("colors") or {}).items():
             if v and not P.is_hex(v if isinstance(v, str) else (v[0] if v else "")):
-                probs.append(f"design.colors.{k} geçerli hex değil: {v}")
+                probs.append(f"design.colors.{k} is not valid hex: {v}")
     return probs
 
 
@@ -221,7 +221,7 @@ def validate(data: dict, ctx, shots: list[str]) -> list[str]:
 def _claude_cli(prompt: str, add_dirs: list[str], model: str | None, timeout=600) -> str:
     exe = shutil.which("claude")
     if not exe:
-        raise RuntimeError("`claude` komutu bulunamadı (Claude Code kurulu değil). --ai api veya --ai offline deneyin.")
+        raise RuntimeError("`claude` command not found (Claude Code is not installed). Try --ai api or --ai offline.")
     # İstem stdin'den gider (ps'te görünmesin). Ekran görüntüleri güvenilmez girdi: yalnızca Read aracı açık.
     cmd = [exe, "-p", "--output-format", "json", "--tools", "Read", "--allowedTools", "Read",
            "--strict-mcp-config", "--max-turns", "25"]
@@ -231,14 +231,14 @@ def _claude_cli(prompt: str, add_dirs: list[str], model: str | None, timeout=600
         cmd += ["--model", model]
     r = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout)
     if r.returncode != 0 and not r.stdout.strip():
-        raise RuntimeError(f"claude hata verdi ({r.returncode}): {r.stderr.strip()[:500]}")
+        raise RuntimeError(f"claude failed ({r.returncode}): {r.stderr.strip()[:500]}")
     try:
         env = json.loads(r.stdout)
     except json.JSONDecodeError:
         return r.stdout
     if isinstance(env, dict):
         if env.get("is_error"):
-            raise RuntimeError(f"claude hata döndürdü: {str(env.get('result'))[:500]}")
+            raise RuntimeError(f"claude returned an error: {str(env.get('result'))[:500]}")
         return str(env.get("result", ""))
     return r.stdout
 
@@ -256,17 +256,22 @@ def _api(prompt: str, shot_paths: dict[str, Path], model: str | None) -> str:
     try:
         import anthropic
     except ImportError:
-        raise RuntimeError("anthropic paketi yok: pip install anthropic")
+        raise RuntimeError("the anthropic package is missing: pip install anthropic")
     if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise RuntimeError("ANTHROPIC_API_KEY tanımlı değil.")
+        raise RuntimeError("ANTHROPIC_API_KEY is not set.")
     content = []
     for name, p in shot_paths.items():
         data, mt = _shrink_b64(p)
         content.append({"type": "text", "text": f"Screenshot file: {name}"})
         content.append({"type": "image", "source": {"type": "base64", "media_type": mt, "data": data}})
     content.append({"type": "text", "text": prompt})
-    msg = anthropic.Anthropic().messages.create(model=model or DEFAULT_MODEL_API, max_tokens=5000,
-                                                messages=[{"role": "user", "content": content}])
+    try:
+        msg = anthropic.Anthropic().messages.create(model=model or DEFAULT_MODEL_API, max_tokens=5000,
+                                                    messages=[{"role": "user", "content": content}])
+    except anthropic.AnthropicError as e:
+        # _openai ile aynı: sunucu yanıtını taşıyan SDK metni yazdırılmaz
+        code = getattr(e, "status_code", None)
+        raise RuntimeError(f"Anthropic request failed: {type(e).__name__}" + (f" ({code})" if code else "")) from None
     return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
 
 
@@ -292,9 +297,9 @@ def _openai(prompt: str, shot_paths: dict[str, Path], model: str | None, schema:
     try:
         import openai
     except ImportError:
-        raise RuntimeError("openai paketi yok: pip install openai")
+        raise RuntimeError("the openai package is missing: pip install openai")
     if not os.environ.get("OPENAI_API_KEY"):
-        raise RuntimeError("OPENAI_API_KEY tanımlı değil.")
+        raise RuntimeError("OPENAI_API_KEY is not set.")
     content = []
     for name, p in shot_paths.items():
         data, mt = _shrink_b64(p)
@@ -311,14 +316,14 @@ def _openai(prompt: str, shot_paths: dict[str, Path], model: str | None, schema:
     except openai.OpenAIError as e:
         # SDK mesajı sunucunun yanıtını taşır ve 401'de anahtarın bir kısmını içerebilir: metni yazdırma.
         info = [str(x) for x in (getattr(e, "status_code", None), getattr(e, "code", None)) if x]
-        raise RuntimeError(f"OpenAI isteği başarısız: {type(e).__name__}" + (f" ({', '.join(info)})" if info else "")) from None
+        raise RuntimeError(f"OpenAI request failed: {type(e).__name__}" + (f" ({', '.join(info)})" if info else "")) from None
     if r.status != "completed":
         why = getattr(r.incomplete_details, "reason", None) or r.status
-        raise RuntimeError(f"OpenAI yanıtı tamamlanmadı: {why}")
+        raise RuntimeError(f"OpenAI response did not complete: {why}")
     for item in r.output or []:
         for c in getattr(item, "content", None) or []:
             if getattr(c, "type", "") == "refusal":
-                raise RuntimeError(f"OpenAI isteği reddetti: {str(c.refusal)[:300]}")
+                raise RuntimeError(f"OpenAI refused the request: {str(c.refusal)[:300]}")
     return r.output_text
 
 
@@ -380,21 +385,21 @@ def finalize(data: dict | None, ctx, shots: list[str], ai="Claude") -> dict:
     reason = None
     tname = fixed.get("template")
     if tname:
-        reason = "kullanıcı seçti"
+        reason = "chosen by you"
     else:
         cand = d.get("template")
         user_bg = (fixed.get("colors") or {}).get("background")
         ok = cand in templates and (not fixed.get("dimension") or templates[cand]["dimension"] == fixed["dimension"])
         theme_clash = bool(ok and user_bg and templates[cand].get("theme") != P.desired_theme(user_bg, profile))
         if ok and not theme_clash:
-            tname, reason = cand, d.get("template_reason") or f"{ai} seçti"
+            tname, reason = cand, d.get("template_reason") or f"chosen by {ai}"
         else:
             keep_dim = fixed.get("dimension") or (templates[cand]["dimension"] if ok else None)
             tname, _, rs = P.choose_template(templates, dimension=keep_dim, category=category,
                                              bg_hex=colors.get("background") or (profile or {}).get("brand"), profile=profile, tone=ctx["tone"])
-            pre = (f"{ai} önerisi '{cand}' ({templates[cand].get('theme')}), verdiğiniz arka plan rengiyle "
-                   f"({user_bg}) uyumsuz; " if theme_clash else "")
-            reason = pre + "kural motoru: " + "; ".join(rs)
+            pre = (f"{ai} suggested '{cand}' ({templates[cand].get('theme')}), which clashes with your background colour "
+                   f"({user_bg}); " if theme_clash else "")
+            reason = pre + "rules: " + "; ".join(rs)
     dimension = templates[tname]["dimension"]
 
     source = "user" if fc.get("background") else (ai.lower() if colors.get("background") else None)
@@ -463,10 +468,10 @@ def plan(ctx, shot_paths: dict[str, Path], backend="auto", model=None, log=print
         log(f"AI backend: {backend}")
     ai = "OpenAI" if backend == "openai" else "Claude"
     if not needs_ai(ctx, shots):
-        log(f"Tüm tasarım kararları ve metinler kullanıcıdan geldi; {ai} çağrılmadı.")
+        log(f"All design decisions and copy came from you; {ai} was not called.")
         return finalize(None, ctx, shots), "user"
     if backend == "offline":
-        log("UYARI: offline mod — tasarım kararları yerel kurallarla, metinler yer tutucu olarak üretilir.")
+        log("WARNING: offline mode: design decisions come from local rules and the copy is placeholder text.")
         count = ctx["fixed"].get("count") or max(len(ctx.get("locked") or []), auto_count(ctx.get("profile"), shots))
         return finalize({"slides": offline_slides(ctx["app"], shots, count, ctx["langs"])}, ctx, shots), "offline"
 
@@ -481,17 +486,17 @@ def plan(ctx, shot_paths: dict[str, Path], backend="auto", model=None, log=print
         elif backend == "openai":
             raw = _openai(build_prompt(ctx, shots) + feedback, shot_paths, model, openai_schema(ctx, shots))
         else:
-            raise RuntimeError(f"Bilinmeyen backend: {backend}")
+            raise RuntimeError(f"Unknown backend: {backend}")
         try:
             data = extract_json(raw)
             probs = validate(data, ctx, shots)
         except Exception as e:  # noqa: BLE001
-            probs, data, last_err = [f"JSON ayrıştırılamadı: {e}"], None, raw[:300]
+            probs, data, last_err = [f"could not parse JSON: {e}"], None, raw[:300]
         if not probs:
             return finalize(data, ctx, shots, ai), backend
-        log(f"{ai} çıktısı düzeltilecek (deneme {attempt}): " + "; ".join(probs[:4]))
+        log(f"Retrying {ai} output (attempt {attempt}): " + "; ".join(probs[:4]))
         feedback = "\n\nYour previous answer had problems: " + "; ".join(probs) + ". Fix them and return ONLY the JSON."
     if data and data.get("slides"):
-        log("UYARI: doğrulama sorunları kaldı; çıktı kurallarla düzeltilerek kullanılıyor.")
+        log("WARNING: validation problems remain; the output is repaired with the rules.")
         return finalize(data, ctx, shots, ai), backend
-    raise RuntimeError(f"{ai} geçerli JSON döndürmedi. Son çıktı: {last_err}")
+    raise RuntimeError(f"{ai} did not return valid JSON. Last output: {last_err}")

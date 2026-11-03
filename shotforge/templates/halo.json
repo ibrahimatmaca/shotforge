@@ -8,7 +8,7 @@
     "productivity",
     "utilities"
   ],
-  "description": "2D · koyu zemin, vurgu renginde parıltılı büyük telefon (alttan taşar), tek vurgu kelimeli başlık.",
+  "description": "2D · dark background, large phone with an accent-coloured glow (bleeds off the bottom), headline with one accent word.",
   "design_notes": "Health/wellness dark theme. Near-black background with a faint tint of the main colour. Centered bold white headline with one accent word. The phone is large, bleeds off the bottom edge, and has a glow in the accent colour radiating around its outline (inner glow feel). Clean, sharp hierarchy; no decorative clutter.",
   "palette": {
     "background": "#0A1310",

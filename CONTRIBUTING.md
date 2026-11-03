@@ -14,7 +14,6 @@ pytest -q            # ~30 s (renders a few real images)
 
 ## Good first contributions
 
-- **English CLI messages / `--help`** (currently Turkish): introduce a small message catalogue and keep Turkish as a locale.
 - **New templates**: copy `shotforge/templates/bubble.json` (2D) or `neon3d.json` (3D). Required keys: `name`, `dimension` (`2d`/`3d`),
   `theme` (`dark`/`light`/`colorful`), `best_for`, `description`, `design_notes`, `palette`, `bg_mode`, `layouts`, `defaults`.
   2D templates must only use `flat`, `peek-flat`, `rotate-l/r`, `duo-flat`; 3D templates `tilt-right/left`, `peek`, `duo` (a test enforces this).

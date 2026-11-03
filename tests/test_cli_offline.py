@@ -29,7 +29,7 @@ def test_user_texts_and_colors_skip_ai(shots_dir, tmp_path, capsys):
     copy = tmp_path / "c.json"
     run("plan", shots_dir, "--app", "Demo", "--texts", texts, "--template", "bubble", "--bg-color", "#6D3AE8",
         "--text-color", "#FFFFFF", "--accent", "#DDD6FE", "--no-ask", "--ai", "claude", "--copy", copy)
-    assert "Claude çağrılmadı" in capsys.readouterr().out
+    assert "Claude was not called" in capsys.readouterr().out
     d = json.loads(copy.read_text(encoding="utf-8"))
     assert d["design"]["template"] == "bubble" and d["design"]["count"] == 1
     assert d["slides"][0]["shot"] == "02_stats.png" and d["generated_with"] == "user"

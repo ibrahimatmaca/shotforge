@@ -63,4 +63,4 @@ def test_user_background_overrides_claude_theme_clash(shots_dir, tmp_path, monke
           "--bg-color", "#0B1026", "--copy", str(copy)])
     d = json.loads(copy.read_text(encoding="utf-8"))["design"]
     assert d["template"] == "neon3d" and d["colors"]["background"] == "#0b1026"
-    assert "uyumsuz" in d["template_reason"]
+    assert "clashes" in d["template_reason"]

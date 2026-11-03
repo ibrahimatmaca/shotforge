@@ -120,7 +120,7 @@ def test_auth_error_never_prints_the_key(shots_dir, tmp_path, fake, capfd):
 def test_doctor_reports_presence_only(fake, capfd):
     main(["doctor"])
     out = capfd.readouterr()
-    assert "OPENAI_API_KEY tanımlı" in out.out and KEY not in out.out + out.err
+    assert "OPENAI_API_KEY set" in out.out and KEY not in out.out + out.err
 
 
 def test_missing_key(shots_dir, tmp_path, fake, monkeypatch):
@@ -149,7 +149,7 @@ def test_refusal_is_reported(shots_dir, tmp_path, fake):
     refusal = SimpleNamespace(type="refusal", refusal="I can't help with that")
     fake.replies = [SimpleNamespace(status="completed", incomplete_details=None, output_text="",
                                     output=[SimpleNamespace(type="message", content=[refusal])])]
-    with pytest.raises(SystemExit, match="reddetti"):
+    with pytest.raises(SystemExit, match="refused"):
         plan(shots_dir, tmp_path)
 
 
