@@ -7,6 +7,7 @@ yalnızca eksik olanları Claude (veya kural motoru) tamamlar.
 Backend'ler:
   claude   : yerel `claude -p` (Claude Code, headless). Ekran görüntülerini Read aracıyla görür.
   api      : Anthropic Python SDK (ANTHROPIC_API_KEY). Görseller base64 olarak gönderilir.
+  openai   : OpenAI Python SDK, Responses API (OPENAI_API_KEY). Görseller base64 olarak gönderilir; auto bunu seçmez.
   offline  : Claude'suz; yerel kurallar + yer tutucu metin.
 """
 from __future__ import annotations
@@ -28,6 +29,7 @@ LANG_NAMES = {
     "ja": "Japanese", "ko": "Korean", "ar": "Arabic", "ru": "Russian", "nl": "Dutch",
 }
 DEFAULT_MODEL_API = "claude-sonnet-5-5"
+DEFAULT_MODEL_OPENAI = "gpt-6.1-sol"
 AUTO_COUNT_RANGE = (6, 7)
 
 PROMPT = """You are an expert App Store (ASO) copywriter AND visual designer. Look at the real app screenshots listed below
@@ -268,6 +270,58 @@ def _api(prompt: str, shot_paths: dict[str, Path], model: str | None) -> str:
     return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
 
 
+def openai_schema(ctx, shots: list[str]) -> dict:
+    """Yanıtı yalnızca mevcut metin ve tasarım alanlarıyla sınırlar. Asıl kapı yine validate + finalize'dır."""
+    def obj(props):
+        return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
+    text = {"type": "string"}
+    by_lang = obj({l: text for l in ctx["langs"]})
+    design = obj({"category": {"type": "string", "enum": list(P.CATEGORIES)},
+                  "dimension": {"type": "string", "enum": ["2d", "3d"]},
+                  "template": {"type": "string", "enum": list(ctx["templates"])},
+                  "template_reason": text,
+                  "colors": obj({"background": text, "text": text, "accent": text}),
+                  "count": {"type": "integer"}})
+    slide = obj({"shot": {"type": "string", "enum": shots},
+                 "role": {"type": "string", "enum": ["hook", "feature", "proof", "cta"]},
+                 "title": by_lang, "subtitle": by_lang})
+    return obj({"design": design, "slides": {"type": "array", "items": slide}})
+
+
+def _openai(prompt: str, shot_paths: dict[str, Path], model: str | None, schema: dict) -> str:
+    try:
+        import openai
+    except ImportError:
+        raise RuntimeError("openai paketi yok: pip install openai")
+    if not os.environ.get("OPENAI_API_KEY"):
+        raise RuntimeError("OPENAI_API_KEY tanımlı değil.")
+    content = []
+    for name, p in shot_paths.items():
+        data, mt = _shrink_b64(p)
+        content.append({"type": "input_text", "text": f"Screenshot file: {name}"})
+        content.append({"type": "input_image", "image_url": f"data:{mt};base64,{data}"})
+    content.append({"type": "input_text", "text": prompt})
+    try:
+        # store=False: yayımlanmamış uygulama ekranları OpenAI tarafında yanıt olarak saklanmasın.
+        # Akıl yürütme token'ları da bu sınırdan yiyebilir, bu yüzden _api'deki 5000'den geniş.
+        r = openai.OpenAI(timeout=600).responses.create(
+            model=model or DEFAULT_MODEL_OPENAI, input=[{"role": "user", "content": content}], store=False,
+            max_output_tokens=16000,
+            text={"format": {"type": "json_schema", "name": "shotforge_plan", "strict": True, "schema": schema}})
+    except openai.OpenAIError as e:
+        # SDK mesajı sunucunun yanıtını taşır ve 401'de anahtarın bir kısmını içerebilir: metni yazdırma.
+        info = [str(x) for x in (getattr(e, "status_code", None), getattr(e, "code", None)) if x]
+        raise RuntimeError(f"OpenAI isteği başarısız: {type(e).__name__}" + (f" ({', '.join(info)})" if info else "")) from None
+    if r.status != "completed":
+        why = getattr(r.incomplete_details, "reason", None) or r.status
+        raise RuntimeError(f"OpenAI yanıtı tamamlanmadı: {why}")
+    for item in r.output or []:
+        for c in getattr(item, "content", None) or []:
+            if getattr(c, "type", "") == "refusal":
+                raise RuntimeError(f"OpenAI isteği reddetti: {str(c.refusal)[:300]}")
+    return r.output_text
+
+
 # --------------------------------------------------------------------------- #
 # Offline plan (kural motoru + yer tutucu metin)
 # --------------------------------------------------------------------------- #
@@ -305,7 +359,7 @@ def auto_count(profile, shots) -> int:
 # --------------------------------------------------------------------------- #
 # Son hâl: kullanıcı kararları > Claude > kurallar
 # --------------------------------------------------------------------------- #
-def finalize(data: dict | None, ctx, shots: list[str]) -> dict:
+def finalize(data: dict | None, ctx, shots: list[str], ai="Claude") -> dict:
     data = data or {}
     langs, templates, fixed = ctx["langs"], ctx["templates"], ctx["fixed"]
     d = dict(data.get("design") or {})
@@ -333,17 +387,17 @@ def finalize(data: dict | None, ctx, shots: list[str]) -> dict:
         ok = cand in templates and (not fixed.get("dimension") or templates[cand]["dimension"] == fixed["dimension"])
         theme_clash = bool(ok and user_bg and templates[cand].get("theme") != P.desired_theme(user_bg, profile))
         if ok and not theme_clash:
-            tname, reason = cand, d.get("template_reason") or "Claude seçti"
+            tname, reason = cand, d.get("template_reason") or f"{ai} seçti"
         else:
             keep_dim = fixed.get("dimension") or (templates[cand]["dimension"] if ok else None)
             tname, _, rs = P.choose_template(templates, dimension=keep_dim, category=category,
                                              bg_hex=colors.get("background") or (profile or {}).get("brand"), profile=profile, tone=ctx["tone"])
-            pre = (f"Claude'un önerdiği '{cand}' ({templates[cand].get('theme')}), verdiğiniz arka plan rengiyle "
+            pre = (f"{ai} önerisi '{cand}' ({templates[cand].get('theme')}), verdiğiniz arka plan rengiyle "
                    f"({user_bg}) uyumsuz; " if theme_clash else "")
             reason = pre + "kural motoru: " + "; ".join(rs)
     dimension = templates[tname]["dimension"]
 
-    source = "user" if fc.get("background") else ("claude" if colors.get("background") else None)
+    source = "user" if fc.get("background") else (ai.lower() if colors.get("background") else None)
     if "background" not in colors:
         derived = {k: v for k, v in P.default_colors(profile, templates[tname].get("theme") if fixed.get("template") else None).items() if k not in colors}
         colors.update(derived)
@@ -407,8 +461,9 @@ def plan(ctx, shot_paths: dict[str, Path], backend="auto", model=None, log=print
     if backend == "auto":
         backend = "claude" if shutil.which("claude") else ("api" if os.environ.get("ANTHROPIC_API_KEY") else "offline")
         log(f"AI backend: {backend}")
+    ai = "OpenAI" if backend == "openai" else "Claude"
     if not needs_ai(ctx, shots):
-        log("Tüm tasarım kararları ve metinler kullanıcıdan geldi; Claude çağrılmadı.")
+        log(f"Tüm tasarım kararları ve metinler kullanıcıdan geldi; {ai} çağrılmadı.")
         return finalize(None, ctx, shots), "user"
     if backend == "offline":
         log("UYARI: offline mod — tasarım kararları yerel kurallarla, metinler yer tutucu olarak üretilir.")
@@ -423,6 +478,8 @@ def plan(ctx, shot_paths: dict[str, Path], backend="auto", model=None, log=print
             raw = _claude_cli(prompt, dirs, model)
         elif backend == "api":
             raw = _api(build_prompt(ctx, shots) + feedback, shot_paths, model)
+        elif backend == "openai":
+            raw = _openai(build_prompt(ctx, shots) + feedback, shot_paths, model, openai_schema(ctx, shots))
         else:
             raise RuntimeError(f"Bilinmeyen backend: {backend}")
         try:
@@ -431,10 +488,10 @@ def plan(ctx, shot_paths: dict[str, Path], backend="auto", model=None, log=print
         except Exception as e:  # noqa: BLE001
             probs, data, last_err = [f"JSON ayrıştırılamadı: {e}"], None, raw[:300]
         if not probs:
-            return finalize(data, ctx, shots), backend
-        log(f"Claude çıktısı düzeltilecek (deneme {attempt}): " + "; ".join(probs[:4]))
+            return finalize(data, ctx, shots, ai), backend
+        log(f"{ai} çıktısı düzeltilecek (deneme {attempt}): " + "; ".join(probs[:4]))
         feedback = "\n\nYour previous answer had problems: " + "; ".join(probs) + ". Fix them and return ONLY the JSON."
     if data and data.get("slides"):
         log("UYARI: doğrulama sorunları kaldı; çıktı kurallarla düzeltilerek kullanılıyor.")
-        return finalize(data, ctx, shots), backend
-    raise RuntimeError(f"Claude geçerli JSON döndürmedi. Son çıktı: {last_err}")
+        return finalize(data, ctx, shots, ai), backend
+    raise RuntimeError(f"{ai} geçerli JSON döndürmedi. Son çıktı: {last_err}")
