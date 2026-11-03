@@ -24,5 +24,5 @@ pytest -q            # ~30 s (renders a few real images)
 ## Guidelines
 
 - Keep user-provided choices authoritative (colours, counts, texts, template) — Claude/rules only fill gaps.
-- Add a test for new behaviour; the Claude backend is tested with a fake `claude` executable (see `tests/test_claude_backend.py`).
-- Do not add telemetry or network calls other than the user-configured Claude backends.
+- Add a test for new behaviour; the Claude backend is tested with a fake `claude` executable (see `tests/test_claude_backend.py`), the OpenAI backend with a fake client (`tests/test_openai_backend.py`).
+- Do not add telemetry or network calls other than the user-configured AI backends.

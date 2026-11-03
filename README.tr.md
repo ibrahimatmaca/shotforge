@@ -39,7 +39,7 @@ pipx install "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge"
 # kurmadan çalıştırma (uv gerekir)
 uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge" shotforge-mcp
 
-shotforge doctor     # Python bağımlılıkları, ffmpeg (isteğe bağlı), claude CLI / API anahtarı kontrolü
+shotforge doctor     # Python bağımlılıkları, ffmpeg (isteğe bağlı), claude CLI / API anahtarları kontrolü
 ```
 
 ## Hızlı başlangıç (CLI)
@@ -47,6 +47,8 @@ shotforge doctor     # Python bağımlılıkları, ffmpeg (isteğe bağlı), cla
 ```bash
 # 1) Her şeyi Claude belirlesin (giriş yapmış `claude` CLI'nizi veya ANTHROPIC_API_KEY'i kullanır)
 shotforge create ./ekranlar --app "Habita" --about "Haftalık istatistikli alışkanlık takibi" --langs en,tr --no-ask -o out
+
+#    Claude kullanmıyor musunuz? Ekleyin: --ai openai  (OPENAI_API_KEY ve `pip install openai` gerekir)
 
 # 2) Önemsediğiniz kararları siz verin, kalanını Claude tamamlasın
 shotforge create ./ekranlar --app "Habita" --dimension 3d --bg-color "#0B1026" --accent "#F472B6" --count 6 -o out
@@ -202,9 +204,10 @@ shotforge preview kayit.mov -o preview.mp4      # 886x1920, 30 fps, H.264/AAC, �
 
 ## Backend'ler, gizlilik ve maliyet
 
-`--ai auto|claude|api|offline`: `claude` CLI varsa o (`claude -p … --allowedTools Read`), yoksa `ANTHROPIC_API_KEY`, yoksa offline (yerel kurallar + yer tutucu metin).
-Ekran görüntüleriniz yalnızca yapılandırdığınız Claude'a gider (Claude Code hesabınız, API anahtarınız veya MCP istemciniz); shotforge'un sunucusu ve telemetrisi yoktur.
-Kullanım *sizin* planınızdan/API faturanızdan düşer. Claude'un çıktısı doğrulanır ve bir kez yeniden denenir; kalan sorunlar kurallarla düzeltilir.
+`--ai auto|claude|api|openai|offline`: `auto`, `claude` CLI varsa onu (`claude -p … --allowedTools Read`), yoksa `ANTHROPIC_API_KEY`'i, yoksa offline'ı (yerel kurallar + yer tutucu metin) seçer.
+`--ai openai`, `OPENAI_API_KEY` ile OpenAI Responses API'yi kullanır (`pip install openai` gerekir; varsayılan model `gpt-6.1-sol`, değiştirmek için `--model`). Yalnızca siz isterseniz çalışır, `auto` bunu seçmez.
+Ekran görüntüleriniz yalnızca yapılandırdığınız yapay zekâya gider (Claude Code hesabınız, Anthropic veya OpenAI API anahtarınız ya da MCP istemciniz); shotforge'un sunucusu ve telemetrisi yoktur. OpenAI backend'i `store: false` gönderir, yani yanıtlar sonradan alınmak üzere saklanmaz; OpenAI hesabınızın veri koşulları yine geçerlidir.
+Kullanım *sizin* planınızdan/API faturanızdan düşer. Modelin çıktısı doğrulanır ve bir kez yeniden denenir; kalan sorunlar kurallarla düzeltilir.
 
 ## Durum ve bilinen sınırlar
 

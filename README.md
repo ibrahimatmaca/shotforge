@@ -41,7 +41,7 @@ pipx install "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge"
 # or run without installing (needs uv)
 uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge" shotforge-mcp
 
-shotforge doctor     # checks Python deps, ffmpeg (optional), claude CLI / API key
+shotforge doctor     # checks Python deps, ffmpeg (optional), claude CLI / API keys
 ```
 
 ## Quick start (CLI)
@@ -49,6 +49,8 @@ shotforge doctor     # checks Python deps, ffmpeg (optional), claude CLI / API k
 ```bash
 # 1) Let Claude decide everything (uses your logged-in `claude` CLI, or ANTHROPIC_API_KEY)
 shotforge create ./screens --app "Habita" --about "Habit tracker with weekly stats" --langs en,tr --no-ask -o out
+
+#    Not using Claude? Add: --ai openai  (needs OPENAI_API_KEY and `pip install openai`)
 
 # 2) Fix the choices you care about; Claude fills the rest
 shotforge create ./screens --app "Habita" --dimension 3d --bg-color "#0B1026" --accent "#F472B6" --count 6 -o out
@@ -226,10 +228,12 @@ App previews are plain screen recordings (no frame added).
 | `auto` | `claude` CLI if found, else `ANTHROPIC_API_KEY` (needs `pip install anthropic`), else offline |
 | `claude` | `claude -p --output-format json --tools Read --allowedTools Read --strict-mcp-config --add-dir <screens>` (prompt on stdin) — your Claude Code login |
 | `api` | Anthropic API with your key (`--model` to choose) |
-| `offline` | no Claude: local rules decide design, placeholder copy |
+| `openai` | OpenAI Responses API with `OPENAI_API_KEY` (needs `pip install openai`). Default model `gpt-6.1-sol`, `--model` to choose. Only runs when you ask for it: `auto` never picks it |
+| `offline` | no AI: local rules decide design, placeholder copy |
 
-Screenshots leave your machine only toward the Claude you configured (your Claude Code account, your API key, or your MCP host) —
-shotforge itself has no server and no telemetry. Usage counts against *your* plan or API billing. Claude's answer is validated
+Screenshots leave your machine only toward the AI you configured (your Claude Code account, your Anthropic or OpenAI API key, or your MCP host) —
+shotforge itself has no server and no telemetry. The OpenAI backend sends `store: false`, so responses are not kept for later retrieval; your
+OpenAI account's data terms still apply. Usage counts against *your* plan or API billing. The model's answer is validated
 (page count, file names, template name, hex colours, empty titles) and retried once; remaining problems are repaired by the rules.
 
 ## Status and known limitations

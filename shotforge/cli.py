@@ -1,4 +1,4 @@
-"""shotforge — App Store ekran görüntüsü + App Preview CLI (Claude ile tasarım kararı ve metin, 2D/3D şablonlarla render)."""
+"""shotforge — App Store ekran görüntüsü + App Preview CLI (AI ile tasarım kararı ve metin, 2D/3D şablonlarla render)."""
 from __future__ import annotations
 
 import argparse
@@ -248,7 +248,7 @@ def run_interactive(inp: dict, shots: dict[str, Path], profile: dict, templates:
     print("\n── Tasarım soruları ─────────────────────────────────────────────")
     print("Ekran görüntülerinden algılanan: ana renk %s, ekran teması %s, yoğunluk %s" %
           (profile.get("brand") or "nötr", profile["ui"], profile["density"]))
-    print("Her soruda Enter = otomatik (Claude / kurallar karar verir).\n")
+    print("Her soruda Enter = otomatik (AI / kurallar karar verir).\n")
 
     if not inp.get("app"):
         inp["app"] = _ask("Uygulama adı: ") or "App"
@@ -280,7 +280,7 @@ def run_interactive(inp: dict, shots: dict[str, Path], profile: dict, templates:
             inp["count"] = int(v)
 
     if not inp.get("locked"):
-        v = _ask("4) Sayfa metinleri — [1] Claude hazırlasın  [2] Ben yazacağım  [3] Dosyadan  (Enter = 1): ")
+        v = _ask("4) Sayfa metinleri — [1] AI hazırlasın  [2] Ben yazacağım  [3] Dosyadan  (Enter = 1): ")
         if v == "3":
             path = _ask("   Metin dosyası yolu (.txt/.md/.json): ")
             if path:
@@ -290,7 +290,7 @@ def run_interactive(inp: dict, shots: dict[str, Path], profile: dict, templates:
             if not n:
                 v = _ask("   Kaç sayfa yazacaksınız? (1–10): ", "7")
                 inp["count"] = max(1, min(10, int(v))) if v.isdigit() else 7
-            print("   Biçim: 'Başlık | Alt başlık'. *kelime* = vurgu. Boş bırakırsanız o dil için Claude yazar.")
+            print("   Biçim: 'Başlık | Alt başlık'. *kelime* = vurgu. Boş bırakırsanız o dil için AI yazar.")
             print("   Ekran görüntüleri: " + ", ".join(shots))
             locked = []
             for i in range(inp["count"]):
@@ -371,7 +371,7 @@ def cmd_plan(a, quiet=False) -> dict:
         print("UYARI: App Store dil başına en fazla 10 ekran görüntüsü kabul eder.", file=sys.stderr)
     miss = T.missing(inp["locked"], inp["count"] or len(inp["locked"]), langs) if inp["locked"] else []
     if miss:
-        print("Kullanıcı metninde eksikler (Claude tamamlayacak): " + "; ".join(miss[:6]) + (" …" if len(miss) > 6 else ""))
+        print("Kullanıcı metninde eksikler (AI tamamlayacak): " + "; ".join(miss[:6]) + (" …" if len(miss) > 6 else ""))
     print(f"Tasarım kararları ve metinler hazırlanıyor ({', '.join(langs)}) …")
     data, used = copywriter.plan(ctx, shots, backend=a.ai, model=a.model)
     d = data["design"]
@@ -839,6 +839,12 @@ def cmd_doctor(_):
     except ImportError:
         sdk = "kurulu değil (isteğe bağlı: pip install anthropic)"
     print(f"{ok(os.environ.get('ANTHROPIC_API_KEY'))} API anahtarı {'ANTHROPIC_API_KEY tanımlı' if os.environ.get('ANTHROPIC_API_KEY') else 'ANTHROPIC_API_KEY yok'}; SDK {sdk}")
+    try:
+        import openai  # noqa: F401
+        sdk = "kurulu"
+    except ImportError:
+        sdk = "kurulu değil (isteğe bağlı: pip install openai)"
+    print(f"{ok(os.environ.get('OPENAI_API_KEY'))} OpenAI       {'OPENAI_API_KEY tanımlı' if os.environ.get('OPENAI_API_KEY') else 'OPENAI_API_KEY yok'}; SDK {sdk} (yalnızca --ai openai ile)")
     fonts = list((HERE / "fonts").glob("Inter-*.otf"))
     print(f"{ok(len(fonts) >= 4)} Inter fontları ({len(fonts)} dosya)")
     print(f"\n--ai auto şu backend'i seçer: {'claude' if c else ('api' if os.environ.get('ANTHROPIC_API_KEY') else 'offline')}")
@@ -916,20 +922,20 @@ def add_render_args(p):
 
 
 def add_design_args(p):
-    g = p.add_argument_group("tasarım girdileri (verilmeyen her şeyi Claude / kurallar belirler)")
+    g = p.add_argument_group("tasarım girdileri (verilmeyen her şeyi AI / kurallar belirler)")
     g.add_argument("--template", default="auto", help="auto | şablon adı | .json yolu (shotforge templates)")
-    g.add_argument("--dimension", default="auto", choices=["auto", "2d", "3d"], help="şablon ailesi; auto = kurallar/Claude seçer")
+    g.add_argument("--dimension", default="auto", choices=["auto", "2d", "3d"], help="şablon ailesi; auto = kurallar/AI seçer")
     g.add_argument("--bg-color", default=None, metavar="#HEX", help="ana arka plan rengi")
     g.add_argument("--text-color", default=None, metavar="#HEX", help="yazı rengi (okunaksızsa slayt başına uyarıyla düzeltilir)")
     g.add_argument("--accent", default=None, metavar="#HEX", help="vurgu rengi")
     g.add_argument("--count", default="auto", type=count_arg, help="sayfa (slayt) sayısı 1–10 | auto (6–7)")
-    g.add_argument("--texts", default=None, metavar="DOSYA", help="kendi metinleriniz (.txt/.md/.json); eksikleri Claude tamamlar")
+    g.add_argument("--texts", default=None, metavar="DOSYA", help="kendi metinleriniz (.txt/.md/.json); eksikleri AI tamamlar")
     g.add_argument("--category", default=None, choices=P.CATEGORIES, help="uygulama kategorisi (yoksa çıkarılır)")
     g.add_argument("--app", default=None, help="uygulama adı")
     g.add_argument("--about", default="", help="uygulama ne yapar (1–3 cümle)")
     g.add_argument("--tone", default="confident, friendly, benefit-first", help="metin tonu")
-    g.add_argument("--ai", default="auto", choices=["auto", "claude", "api", "offline"])
-    g.add_argument("--model", default=None, help="Claude model adı (isteğe bağlı)")
+    g.add_argument("--ai", default="auto", choices=["auto", "claude", "api", "openai", "offline"])
+    g.add_argument("--model", default=None, help="seçilen backend'in model adı (isteğe bağlı)")
     g.add_argument("--regen", action="store_true", help="tasarım/metin dosyası olsa bile yeniden üret")
     g.add_argument("--ask", action="store_true", help="soruları sor (terminalde varsayılan: eksik girdi varsa sorar)")
     g.add_argument("--no-ask", action="store_true", help="hiç soru sorma")
@@ -940,7 +946,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="shotforge", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    c = sub.add_parser("create", help="tasarım kararı + metin (Claude) + sayfa sayısı kadar AYRI görsel x diller — tek komut")
+    c = sub.add_parser("create", help="tasarım kararı + metin (AI) + sayfa sayısı kadar AYRI görsel x diller — tek komut")
     c.add_argument("shots", nargs="+", help="ekran görüntüsü dosyaları veya klasör")
     add_design_args(c)
     add_render_args(c)
