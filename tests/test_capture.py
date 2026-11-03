@@ -21,9 +21,9 @@ lang = next(x for x in a if x.startswith("LANG=")).split("=")[1]
 assert os.path.isabs(a[-1])
 Path(os.environ["FAKE_LOG"]).open("a").write(" ".join(a) + "\\n")
 if lang == os.environ.get("FAKE_FAIL"):
-    print("flow failed", file=sys.stderr); sys.exit(3)
+    print("flow failed"); print("╭──╮\\n│ Run on Maestro Cloud │\\n╰──╯", file=sys.stderr); sys.exit(3)
 size = tuple(map(int, os.environ.get("FAKE_SIZE", "1320x2868").split("x")))
-d = Path(a[a.index("--test-output-dir") + 1]) / "takeScreenshot"
+d = Path(a[a.index("--test-output-dir") + 1]) / "2026-11-04_013605" / "shots" / "takeScreenshot"  # Maestro 2.11 ile doğrulandı
 d.mkdir(parents=True)
 if lang != os.environ.get("FAKE_EMPTY"):
     Image.new("RGB", size, (20, 90, 200)).save(d / "01_home.png")
@@ -65,7 +65,7 @@ def test_platform_folder_and_screenshots_in_cwd(maestro, monkeypatch):
 
 def test_failure_stops_and_reports(maestro, monkeypatch):
     monkeypatch.setenv("FAKE_FAIL", "tr")
-    with pytest.raises(RuntimeError, match=r"failed for \[tr\] \(exit 3\): flow failed"):
+    with pytest.raises(RuntimeError, match=r"failed for \[tr\] \(exit 3\): flow failed$"):
         C.capture(maestro / "flows", ["en", "tr"], maestro / "s")
     assert (maestro / "s" / "en" / "01_home.png").exists() and not (maestro / "s" / "tr").exists()
     assert not list((maestro / "s").glob(".capture-*"))
@@ -82,6 +82,17 @@ def test_warns_on_missing_names_and_wrong_shape(maestro, monkeypatch):
     monkeypatch.setenv("FAKE_SIZE", "1000x1000")
     w = "\n".join(C.capture(maestro / "flows", ["en", "tr"], maestro / "s", platform="ios"))
     assert "[tr] is missing" in w and "03_goals.png" in w and "cropped" in w
+
+
+def test_warns_about_older_screenshots_and_keeps_them(maestro):
+    old = maestro / "s" / "en" / "99_old.png"
+    old.parent.mkdir(parents=True)
+    Image.new("RGB", (10, 10)).save(old)
+    w = "\n".join(C.capture(maestro / "flows", ["en"], maestro / "s"))
+    assert "99_old.png" in w and "01_home.png" not in w and old.exists()
+    assert C.capture(maestro / "flows", ["en"], maestro / "s") != []  # hâlâ duruyor, hâlâ uyarır
+    old.unlink()
+    assert C.capture(maestro / "flows", ["en"], maestro / "s") == []  # aynı adların üzerine yazmak uyarı değil
 
 
 def test_missing_maestro_and_bad_inputs(tmp_path, monkeypatch):

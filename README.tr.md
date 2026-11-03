@@ -246,7 +246,7 @@ shotforge create shots --app Habita --langs en,tr
 shotforge create shots --maestro .maestro/shots --capture-platform ios --app Habita --langs en,tr
 ```
 
-shotforge her dil için bir kez `maestro test -e LANG=<dil>` çalıştırır ve PNG'leri `shots/ios/<dil>/` altına taşır. Cihaz açmaz, uygulama kurmaz, cihaz dilini değiştirmez: akış, açık cihazda kurulu olan build'i sürer; uygulamayı `${LANG}` dilinde açmak akışın işidir. iOS örneği:
+shotforge her dil için bir kez `maestro test -e LANG=<dil>` çalıştırır ve PNG'leri `shots/ios/<dil>/` altına taşır. Cihaz açmaz, uygulama kurmaz, cihaz dilini değiştirmez: akış, açık cihazda kurulu olan build'i sürer; uygulamayı `${LANG}` dilinde açmak akışın işidir. Uyarlamanız için bir başlangıç (açılış argümanlarının uygulamaya nasıl ulaştığı ve dilin nasıl seçildiği uygulamaya ve platforma bağlıdır):
 
 ```yaml
 appId: com.example.habita
@@ -260,7 +260,7 @@ appId: com.example.habita
 - takeScreenshot: 02_stats
 ```
 
-Her dilde aynı görüntü adlarını kullanın, sırayı numarayla belirleyin. shotforge eksik adlarda ve kırpılacak ekran oranlarında uyarır. Ekranlar olduğu gibi yayımlanacağı için test verisi kullanın.
+Her dilde aynı görüntü adlarını kullanın, sırayı numarayla belirleyin. shotforge eksik adlarda, kırpılacak ekran oranlarında ve klasörde kalan eski PNG'lerde uyarır; eskileri silmez, silinmezlerse slayt olurlar. Ekranlar olduğu gibi yayımlanacağı için test verisi kullanın.
 `shotforge doctor`, Maestro'nun ve açık cihazın durumunu gösterir.
 
 ## fastlane
@@ -276,6 +276,7 @@ store/fastlane/screenshots/en-US/APP_IPHONE_67_iphone-6.9_01_home.png        # d
 store/fastlane/metadata/android/en-US/images/phoneScreenshots/01_home.png    # ayrıca sevenInchScreenshots, tenInchScreenshots
 store/fastlane/metadata/android/en-US/images/featureGraphic.png
 store/app-store-extra/en/header-search/5244x2950.png                         # deliver bunları yüklemez
+store/en/app-store/previews/iphone-6.9.mp4                                   # varsa App Preview: bunları kendiniz yüklersiniz
 ```
 
 Dil kodları mağaza yerel ayarına çevrilir (`en → en-US`; `tr`, Apple'da `tr`, Play'de `tr-TR`). Yeni bir cihaz boyutunu fastlane sürümünüzle kontrol edin; iki araç da mağazalarla birlikte değişir.

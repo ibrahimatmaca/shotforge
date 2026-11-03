@@ -23,8 +23,8 @@ _ASPECT_TOLERANCE = 0.10
 
 
 def _new_screens(run: Path) -> list[Path]:
-    """Maestro görüntüyü sürüme göre çalışma klasörüne veya --test-output-dir/takeScreenshot altına yazar."""
-    shots = [*run.glob("*.png"), *(run / "artifacts" / "takeScreenshot").rglob("*.png")]
+    """Maestro 2.11: artifacts/<zaman>/<akış>/takeScreenshot/<ad>.png. Eski sürümler çalışma klasörüne yazar."""
+    shots = [*run.glob("*.png"), *(p for p in (run / "artifacts").rglob("*.png") if "takeScreenshot" in p.parts)]
     shots = [p for p in shots if p.is_file() and not p.is_symlink()]
     names = [p.name for p in shots]
     dup = sorted({n for n in names if names.count(n) > 1})
@@ -43,7 +43,9 @@ def _run_flows(exe: str, flows: Path, lang: str, device: str | None, run: Path, 
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"Maestro did not finish in {timeout} s for [{lang}].") from None
     if r.returncode != 0:
-        tail = (r.stderr.strip() or r.stdout.strip())[-800:]
+        # Maestro hatanın ardından çerçeveli bir tanıtım kutusu basar; asıl neden kutunun üstünde kalır
+        lines = [l for l in f"{r.stdout}\n{r.stderr}".splitlines() if l.strip() and l.strip()[0] not in "╭│╰"]
+        tail = "\n".join(lines)[-800:]
         raise RuntimeError(f"Maestro failed for [{lang}] (exit {r.returncode}): {tail}")
 
 
@@ -88,6 +90,11 @@ def capture(flows, langs: list[str], out, platform: str | None = None, device: s
                 raise RuntimeError(f"Maestro finished for [{lang}] but wrote no PNG. Add takeScreenshot steps to your flows.")
             warnings += [f"[{lang}] {w}" for w in _aspect_warnings(shots, platform)]
             dest.mkdir(parents=True, exist_ok=True)
+            # silmek kullanıcının dosyasına dokunur; ama kalan görüntü create'te slayt olur, bu yüzden söylenir
+            stale = sorted(p.name for p in dest.glob("*.png") if p.name not in {s.name for s in shots})
+            if stale:
+                warnings.append(f"[{lang}] {dest} has older screenshots this run didn't take; delete them if those screens are gone, "
+                                f"or they become slides: {', '.join(stale)}")
             for s in shots:
                 os.replace(s, dest / s.name)
         names[lang] = {s.name for s in shots}

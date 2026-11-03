@@ -265,7 +265,7 @@ shotforge create shots --maestro .maestro/shots --capture-platform ios --app Hab
 ```
 
 shotforge runs `maestro test -e LANG=<lang>` once per language and moves the PNGs to `shots/ios/<lang>/`. It doesn't boot a device, install the app or change the device language:
-the flow drives the build already on the booted device, and opening the app in `${LANG}` is up to the flow. On iOS, for example:
+the flow drives the build already on the booted device, and opening the app in `${LANG}` is up to the flow. A starting point to adapt (how launch arguments reach your app, and how it picks a language, depends on the app and platform):
 
 ```yaml
 appId: com.example.habita
@@ -279,7 +279,7 @@ appId: com.example.habita
 - takeScreenshot: 02_stats
 ```
 
-Use the same screenshot names in every language; number them for the order you want. shotforge warns about missing names and about shapes that would be cropped. Use test data, because the screens are published as they are.
+Use the same screenshot names in every language; number them for the order you want. shotforge warns about missing names, about shapes that would be cropped, and about older PNGs in the folder, which it leaves in place and which would become slides. Use test data, because the screens are published as they are.
 `shotforge doctor` shows whether Maestro and a booted device are available.
 
 ## fastlane
@@ -295,6 +295,7 @@ store/fastlane/screenshots/en-US/APP_IPHONE_67_iphone-6.9_01_home.png        # d
 store/fastlane/metadata/android/en-US/images/phoneScreenshots/01_home.png    # also sevenInchScreenshots, tenInchScreenshots
 store/fastlane/metadata/android/en-US/images/featureGraphic.png
 store/app-store-extra/en/header-search/5244x2950.png                         # deliver doesn't upload these
+store/en/app-store/previews/iphone-6.9.mp4                                   # App Previews, if any: upload these yourself
 ```
 
 Language codes become store locales (`en → en-US`, `tr → tr` on Apple and `tr-TR` on Play). Check a new device size against your fastlane version; both tools change with the stores.
