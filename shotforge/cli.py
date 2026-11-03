@@ -12,7 +12,7 @@ import zipfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
-from . import copywriter, intake as I, palette as P, texts as T
+from . import brand as B, copywriter, intake as I, palette as P, texts as T
 from .engine import BANNERS, BG_PRESETS, DEVICES, FRAMES, PREVIEW_SIZES, STYLES, render_job, text_problems
 
 HERE = Path(__file__).resolve().parent
@@ -26,6 +26,7 @@ SHOT_PLATFORMS = ("ios", "ipad", "android", "android-tablet")
 # shots_by_set anahtarı: "<platform>/<dil>", ikisinden biri boş olabilir ("android/", "/tr")
 SET_KEY_RE = re.compile(r"(ios|ipad|android|android-tablet)?/([a-z]{2,3}(-[A-Za-z]{2,4})?)?")
 VIDEO_EXT = {".mp4", ".mov", ".m4v"}
+DEFAULT_TONE = "confident, friendly, benefit-first"
 
 
 # --------------------------------------------------------------------------- #
@@ -37,6 +38,31 @@ TEMPLATE_ALIASES = {"kova": "bubble", "pulse": "heartbeat", "inner-glow": "halo"
 
 def canon_template(name: str | None) -> str | None:
     return TEMPLATE_ALIASES.get(name, name) if name else name
+
+
+def apply_brand(a):
+    """shotforge.toml değerlerini yalnızca bayrakla verilmemiş alanlara yazar. render tasarımı copy dosyasından alır,
+    bu yüzden orada yalnızca copy dosyasında olmayan font ve logo uygulanır."""
+    path = a.brand or (None if a.no_brand else B.find(Path.cwd()))
+    b = B.load(path) if path else None
+    if b:
+        print(f"Brand file: {path}")
+        a.font = getattr(a, "font", None) or b["font"]
+        a.logo = getattr(a, "logo", None) or b["logo"]
+        a.icon = getattr(a, "icon", None) or b["logo"]
+        if a.cmd != "render":
+            c = b["colors"]
+            a.bg_color, a.text_color = a.bg_color or c.get("background"), a.text_color or c.get("text")
+            a.accent = a.accent or c.get("accent")
+            a.tone = a.tone or b["tone"]
+            a.langs = a.langs or ",".join(b["langs"]) or None
+            t = canon_template(b["template"])
+            if t and t not in list_templates():
+                raise SystemExit(f"{path}: unknown template: {t}. Available: {', '.join(list_templates())}")
+            if t and a.template in (None, "auto") and a.dimension in (None, "auto", list_templates()[t]["dimension"]):
+                a.template = t
+    if a.cmd != "render":
+        a.tone = a.tone or DEFAULT_TONE
 
 
 def list_templates() -> dict[str, dict]:
@@ -425,6 +451,11 @@ def warn_keywords(keywords: list[str], slides: list[dict], used: str):
         print(f"WARNING: Google Play guidelines advise against these words in store images: {', '.join(risky)}", file=sys.stderr)
 
 
+def cmd_plan_only(a):
+    a.langs = a.langs or ",".join(I.DEFAULT_LANGS)
+    return cmd_plan(a)
+
+
 def print_design(d: dict):
     c = d.get("colors") or {}
     print("\nDesign decision:")
@@ -452,7 +483,7 @@ def slide_cfg(a, tpl, pal, idx, slide, shot_paths, names, warnings) -> dict:
     if a.bg:  # ileri düzey: ham arka plan (preset / degrade / görsel)
         cfg["bg"] = a.bg
         cfg.pop("bg_angle", None)
-    for k in ("frame", "text_position", "align", "font"):
+    for k in ("frame", "text_position", "align", "font", "logo"):
         v = getattr(a, k, None)
         if v:
             cfg[k] = v
@@ -526,6 +557,10 @@ def cmd_render(a, data: dict | None = None):
         icon = os.path.expanduser(str(icon))
         if Path(icon).suffix.lower() not in IMG_EXT or not Path(icon).is_file():
             raise SystemExit(f"Icon must be an image file: {icon}")
+    if getattr(a, "logo", None):
+        a.logo = os.path.expanduser(str(a.logo))
+        if Path(a.logo).suffix.lower() not in IMG_EXT or not Path(a.logo).is_file():
+            raise SystemExit(f"Logo must be an image file: {a.logo}")
     try:
         targets = I.check_targets(data["targets"]) if data.get("targets") else None
     except ValueError as e:
@@ -952,6 +987,7 @@ def add_render_args(p):
     p.add_argument("--text-position", default=None, choices=["top", "bottom"])
     p.add_argument("--align", default=None, choices=["center", "left"])
     p.add_argument("--font", default=None)
+    p.add_argument("--logo", default=None, metavar="FILE", help="small logo on every slide, in the free band beside the headline")
     p.add_argument("--perspective", type=float, default=None)
     p.add_argument("--no-grain", action="store_true")
     p.add_argument("--only", default=None, help="only these slides, e.g. 1,3 (for quick tests)")
@@ -959,6 +995,11 @@ def add_render_args(p):
                    help="also write ONE review image with all slides side by side "
                         "(out/_review/overview_<lang>.jpg; not a deliverable)")
     p.add_argument("--brief", action="store_true", help="also write a Claude Design brief (md)")
+
+
+def add_brand_args(p):
+    p.add_argument("--brand", default=None, metavar="FILE", help="brand file (default: shotforge.toml in this folder or a parent, up to the repository root)")
+    p.add_argument("--no-brand", action="store_true", help="ignore shotforge.toml")
 
 
 def add_design_args(p):
@@ -973,7 +1014,7 @@ def add_design_args(p):
     g.add_argument("--category", default=None, choices=P.CATEGORIES, help="app category (inferred if omitted)")
     g.add_argument("--app", default=None, help="app name")
     g.add_argument("--about", default="", help="what the app does (1–3 sentences)")
-    g.add_argument("--tone", default="confident, friendly, benefit-first", help="copy tone")
+    g.add_argument("--tone", default=None, help=f"copy tone (default: {DEFAULT_TONE})")
     g.add_argument("--keywords", default=None, metavar="A,B,C", help="search keywords the AI should work into the headlines where they read naturally")
     g.add_argument("--ai", default="auto", choices=["auto", "claude", "api", "openai", "offline"])
     g.add_argument("--model", default=None, help="model name for the chosen backend (optional)")
@@ -991,6 +1032,7 @@ def main(argv=None):
     c.add_argument("shots", nargs="+", help="screenshot files or a folder")
     add_design_args(c)
     add_render_args(c)
+    add_brand_args(c)
     g = c.add_argument_group("store targets (anything left out uses the default)")
     g.add_argument("--store", default=None, help="appstore | playstore | both (default: both)")
     g.add_argument("--header-sizes", default=None, help=f"{','.join(I.HEADER_SIZES)} or no (default: all)")
@@ -1004,9 +1046,10 @@ def main(argv=None):
     pl = sub.add_parser("plan", help="create only the design decisions and copy (shotforge.copy.json)")
     pl.add_argument("shots", nargs="+")
     add_design_args(pl)
-    pl.add_argument("--langs", default="en,tr")
+    add_brand_args(pl)
+    pl.add_argument("--langs", default=None, help="comma-separated languages (default: en,tr)")
     pl.add_argument("--copy", default="shotforge.copy.json")
-    pl.set_defaults(fn=lambda a: cmd_plan(a))
+    pl.set_defaults(fn=cmd_plan_only)
 
     r = sub.add_parser("render", help="redraw from an existing copy file")
     r.add_argument("shots", nargs="*", help="(optional) replace the screenshots")
@@ -1015,6 +1058,7 @@ def main(argv=None):
     r.add_argument("--text-color", default=None, metavar="#HEX")
     r.add_argument("--accent", default=None, metavar="#HEX")
     add_render_args(r)
+    add_brand_args(r)
     r.set_defaults(fn=lambda a: render_and_package(a), langs=None)  # verilmezse copy dosyasındaki diller
 
     an = sub.add_parser("analyze", help="analyse screenshots and show the rule-based 2D/3D template suggestion (no AI)")
@@ -1056,6 +1100,8 @@ def main(argv=None):
 
     a = ap.parse_args(argv)
     try:
+        if hasattr(a, "brand"):
+            apply_brand(a)
         a.fn(a)
     except subprocess.TimeoutExpired:
         raise SystemExit("Error: claude timed out (600 s).")

@@ -587,6 +587,21 @@ def text_problems(cfg: dict, locale: str | None) -> list[str]:
     return problems
 
 
+def draw_logo(canvas: Image.Image, path: str, tb, pos: str, band: float):
+    """Metnin kullanmadığı üst veya alt bantta, metinle aynı hizada küçük logo. En-boy oranı korunur."""
+    cw, ch = canvas.size
+    logo = Image.open(path).convert("RGBA")
+    h = int(ch * 0.034)
+    w = max(1, round(logo.width * h / logo.height))
+    if w > cw * 0.3:
+        w = int(cw * 0.3)
+        h = max(1, round(logo.height * w / logo.width))
+    logo = logo.resize((w, h), Image.LANCZOS)
+    x = int(tb.margin) if tb.align == "left" else (cw - w) // 2
+    y = int((band - h) / 2) if pos == "top" else int(ch - band + (band - h) / 2)
+    canvas.paste(logo, (x, y), logo)
+
+
 def render_slide(cfg: dict, locale: str | None, idx: int = 0, total: int = 1) -> Image.Image:
     dev = DEVICES[cfg["device"]]
     W, H = dev["size"]
@@ -643,6 +658,8 @@ def render_slide(cfg: dict, locale: str | None, idx: int = 0, total: int = 1) ->
             deco_squiggle(canvas, it, ctx)
         elif it["type"] == "sparkle":
             deco_sparkle(canvas, it, ctx)
+    if cfg.get("logo"):
+        draw_logo(canvas, cfg["logo"], tb, pos, top_margin)
 
     out = canvas.convert("RGB").resize((W, H), Image.LANCZOS)
     return out if cfg.get("no_grain") else add_grain(out)

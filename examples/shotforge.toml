@@ -1,0 +1,14 @@
+# Brand file: every run looks the same. Command-line flags still win.
+# shotforge finds this file in the current folder or a parent, up to the repository root.
+# font and logo are relative to this file and must stay inside its folder.
+[brand]
+tone = "calm, direct, benefit-first"
+# template = "bubble"            # a built-in template name
+# langs = ["en", "tr"]
+# font = "assets/Brand-Bold.otf"
+# logo = "assets/logo.png"       # small, in the free band beside the headline; also the header icon if --icon is not given
+
+[brand.colors]
+background = "#6D28D9"
+text = "#FFFFFF"
+accent = "#FDE047"
