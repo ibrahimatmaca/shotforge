@@ -178,7 +178,7 @@ App previews are plain screen recordings (no frame added).
 | `--ai` | What runs |
 |---|---|
 | `auto` | `claude` CLI if found, else `ANTHROPIC_API_KEY` (needs `pip install anthropic`), else offline |
-| `claude` | `claude -p --output-format json --allowedTools Read --add-dir <screens>` — your Claude Code login |
+| `claude` | `claude -p --output-format json --tools Read --allowedTools Read --strict-mcp-config --add-dir <screens>` (prompt on stdin) — your Claude Code login |
 | `api` | Anthropic API with your key (`--model` to choose) |
 | `offline` | no Claude: local rules decide design, placeholder copy |
 
@@ -196,7 +196,7 @@ Beta (v0.3). CI runs the test-suite on Linux and macOS, Python 3.10–3.13.
   improvement — contributions welcome.
 - Linux/macOS are tested; Windows is untested.
 - Device frames are generic modern-phone drawings, not Apple's official bezels. ~5–6 s per image.
-- Headlines: ≤ 3 lines, subtitles ≤ 2 lines; long text shrinks automatically. Screenshot analysis is a simple heuristic (a hint, not a verdict).
+- Headlines: ≤ 3 lines, subtitles ≤ 2 lines; long text shrinks automatically, and text that still overflows is reported. The bundled Inter font has no Japanese, Korean or Arabic glyphs: shotforge warns, and `--font` selects another font (Arabic also needs Pillow with raqm). Screenshot analysis is a simple heuristic (a hint, not a verdict).
 - Tablet output crops a phone screenshot to the iPad ratio; supply real iPad screens.
 
 ## Development

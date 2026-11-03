@@ -541,6 +541,28 @@ def pick_text(v, locale):
     return str(v)
 
 
+def text_problems(cfg: dict, locale: str | None) -> list[str]:
+    """Çizimden önce: fontta olmayan karakterler ve en küçük boyutta bile sığmayan metin."""
+    W, H = DEVICES[cfg["device"]]["size"]
+    cw, ch = W * SS, H * SS
+    title, subtitle = pick_text(cfg.get("title"), locale), pick_text(cfg.get("subtitle"), locale)
+    fp_t = resolve_font(cfg.get("title_weight", "ExtraBold"), cfg.get("font"))
+    fp_s = resolve_font("Regular", cfg.get("font"))
+    problems = []
+    missing = set()
+    for text, path in ((title, fp_t), (subtitle, fp_s)):
+        font = ImageFont.truetype(path, 64)
+        notdef = bytes(font.getmask("\U000F0000"))  # özel kullanım alanı: fontun "eksik karakter" şekli
+        missing |= {c for c in text if not c.isspace() and c != "*" and bytes(font.getmask(c)) == notdef}
+    if missing:
+        problems.append(f"fontta olmayan karakterler ({''.join(sorted(missing)[:8])}); --font ile uygun bir font verin.")
+    tb = TextBlock(title, subtitle, cw, ch, fp_t, fp_s, (0, 0, 0, 255), (0, 0, 0), cfg.get("align", "center"),
+                   float(cfg.get("title_scale", 1.0)))
+    if any(w > cw - 2 * tb.margin for p in tb.parts for _, w in p["lines"]):
+        problems.append("metin en küçük boyutta bile taşıyor; kısaltın veya boşlukla bölün.")
+    return problems
+
+
 def render_slide(cfg: dict, locale: str | None, idx: int = 0, total: int = 1) -> Image.Image:
     dev = DEVICES[cfg["device"]]
     W, H = dev["size"]
@@ -560,8 +582,8 @@ def render_slide(cfg: dict, locale: str | None, idx: int = 0, total: int = 1) ->
     top_margin, gap = ch * 0.060, ch * 0.030
     pos = cfg.get("text_position", "top")
     style = cfg["style"]
-    if style.startswith("peek") and pos == "bottom":
-        style = "tilt-right"
+    if pos == "bottom":  # peek telefonu alta taşırır; aynı boyutta (2D/3D) kalan düzene geç
+        style = {"peek": "tilt-right", "peek-flat": "flat"}.get(style, style)
     if pos == "top":
         text_y = top_margin
         region = (0, text_y + tb.height + gap, cw, ch - ch * 0.035)

@@ -220,12 +220,14 @@ def _claude_cli(prompt: str, add_dirs: list[str], model: str | None, timeout=600
     exe = shutil.which("claude")
     if not exe:
         raise RuntimeError("`claude` komutu bulunamadı (Claude Code kurulu değil). --ai api veya --ai offline deneyin.")
-    cmd = [exe, "-p", prompt, "--output-format", "json", "--allowedTools", "Read", "--max-turns", "25"]
+    # İstem stdin'den gider (ps'te görünmesin). Ekran görüntüleri güvenilmez girdi: yalnızca Read aracı açık.
+    cmd = [exe, "-p", "--output-format", "json", "--tools", "Read", "--allowedTools", "Read",
+           "--strict-mcp-config", "--max-turns", "25"]
     for d in add_dirs:
         cmd += ["--add-dir", d]
     if model:
         cmd += ["--model", model]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    r = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout)
     if r.returncode != 0 and not r.stdout.strip():
         raise RuntimeError(f"claude hata verdi ({r.returncode}): {r.stderr.strip()[:500]}")
     try:
@@ -341,8 +343,9 @@ def finalize(data: dict | None, ctx, shots: list[str]) -> dict:
             reason = pre + "kural motoru: " + "; ".join(rs)
     dimension = templates[tname]["dimension"]
 
-    slides = [dict(s) for s in (data.get("slides") or [])]
-    count = fixed.get("count") or (len(slides) if slides else auto_count(profile, shots))
+    # model çıktısı güvenilmez: yalnızca metin alanları geçer, çizim ayarları geçmez
+    slides = [{k: s[k] for k in ("shot", "role", "title", "subtitle") if k in s} for s in (data.get("slides") or [])]
+    count = fixed.get("count") or (min(len(slides), 10) if slides else auto_count(profile, shots))
     if len(slides) < count:
         fill = offline_slides(ctx["app"], shots, count, langs)
         slides += fill[len(slides):]

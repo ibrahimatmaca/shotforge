@@ -16,7 +16,9 @@ a = sys.argv[1:]
 if "--version" in a:
     print("fake 0"); sys.exit(0)
 assert "-p" in a and "--output-format" in a and "--allowedTools" in a
-state = os.environ["FAKE_STATE"]
+assert a[a.index("--tools") + 1] == "Read" and "--strict-mcp-config" in a
+assert "APP NAME" in sys.stdin.read() and not any("APP NAME" in x for x in a)   # prompt on stdin, not argv
+state =os.environ["FAKE_STATE"]
 n = int(open(state).read()) + 1 if os.path.exists(state) else 1
 open(state, "w").write(str(n))
 shots = ["01_home.png", "02_stats.png", "03_goals.png"]

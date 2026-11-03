@@ -14,6 +14,7 @@ import argparse
 import asyncio
 import contextlib
 import functools
+import inspect
 import json
 import subprocess
 import os
@@ -32,7 +33,7 @@ except ImportError:
         raise SystemExit('The MCP server needs the "mcp" package:  pip install "shotforge[mcp]"') from e
 
 from . import cli, copywriter, palette as P
-from .engine import DEVICES
+from .engine import DEVICES, PREVIEW_SIZES
 
 mcp = _Server(
     "shotforge",
@@ -54,7 +55,7 @@ def _safe(fn):
     def msg(e):
         return str(e) or e.__class__.__name__
 
-    if asyncio.iscoroutinefunction(fn):
+    if inspect.iscoroutinefunction(fn):
         @functools.wraps(fn)
         async def wrapper(*a, **k):
             try:
@@ -110,6 +111,21 @@ def _valid_hex(v: Optional[str], name: str) -> Optional[str]:
     return "#" + v.strip().lstrip("#")
 
 
+def _builtin_template(name: str) -> str:
+    """MCP'de şablon yalnızca adla seçilir; model yerel bir .json yolu yükletemez."""
+    name = cli.canon_template(name)
+    templates = cli.list_templates()
+    if name not in templates:
+        raise ValueError(f"unknown template '{name}'. Available: {', '.join(templates)}")
+    return name
+
+
+def _valid_device(device: str, allowed) -> str:
+    if device not in allowed:
+        raise ValueError(f"device must be one of {', '.join(allowed)}")
+    return device
+
+
 # --------------------------------------------------------------------------- #
 @mcp.tool()
 @_safe
@@ -153,9 +169,9 @@ def _create(shots, app, slides, langs, template, dimension, background_color, te
     sm = _collect(shots)
     templates = cli.list_templates()
     langs = [l.strip() for l in langs if l.strip()] or ["en"]
-    if device not in DEVICES:
-        raise ValueError(f"device must be one of {', '.join(DEVICES)}")
-    colors = {k: v for k, v in (("background", _valid_hex(background_color, "background_color")),
+    cli.check_langs(langs)
+    _valid_device(device, DEVICES)
+    colors ={k: v for k, v in (("background", _valid_hex(background_color, "background_color")),
                                 ("text", _valid_hex(text_color, "text_color")),
                                 ("accent", _valid_hex(accent_color, "accent_color"))) if v}
     locked = []
@@ -167,10 +183,8 @@ def _create(shots, app, slides, langs, template, dimension, background_color, te
                            **({"role": s["role"]} if s.get("role") else {})))
         if not locked[-1]["shot"]:
             locked[-1].pop("shot")
-    tname = None if template in (None, "", "auto") else cli.canon_template(template)
-    if tname and tname not in templates:
-        raise ValueError(f"unknown template '{tname}'. Available: {', '.join(templates)}")
-    dim = None if dimension in (None, "", "auto") else dimension.lower()
+    tname = None if template in (None, "", "auto") else _builtin_template(template)
+    dim =None if dimension in (None, "", "auto") else dimension.lower()
     if dim not in (None, "2d", "3d"):
         raise ValueError("dimension must be auto, 2d or 3d")
     if category and category not in P.CATEGORIES:
@@ -218,7 +232,10 @@ def _render(copy_path: Path, out: Path, device, layout, fmt, only, jobs, style, 
     ov_path = review / f"overview_{first}.jpg"
     with _Quiet():
         cli.make_sheet(files[first], ov_path, h=640, gap=20)
-    return dict(files=files, overview=str(ov_path), note="Each file is a separate, upload-ready image (not combined).")
+    res = dict(files=files, overview=str(ov_path), note="Each file is a separate, upload-ready image (not combined).")
+    if a.warnings:
+        res["render_warnings"] = a.warnings
+    return res
 
 
 @mcp.tool()
@@ -287,6 +304,10 @@ async def render_screenshots(
     cp = _abs(copy_file)
     if not cp.exists():
         raise ValueError(f"copy file not found: {cp}")
+    _valid_device(device, DEVICES)
+    _builtin_template((cli.read_copy(cp).get("design") or {}).get("template", "classic"))
+    if template:
+        template = _builtin_template(template)
     out = _abs(out_dir) if out_dir else cp.parent
     ov = dict(template=template, background=_valid_hex(background_color, "background_color"),
               text=_valid_hex(text_color, "text_color"), accent=_valid_hex(accent_color, "accent_color"))
@@ -300,12 +321,19 @@ async def render_screenshots(
 @mcp.tool()
 @_safe
 async def convert_app_preview(input_video: str, output_video: str, device: str = "iphone-6.9", landscape: bool = False,
-                              fit: str = "cover", extend: bool = False) -> str:
+                              fit: str = "cover", extend: bool = False, overwrite: bool = False) -> str:
     """Convert a screen recording to App Store Connect app-preview specs with ffmpeg (886x1920 portrait for iPhone 6.9",
     30 fps, H.264 High@4.0, AAC stereo, max 30 s; adds silent audio if missing). `extend` freezes the last frame to reach 15 s.
+    output_video must end in .mp4, .mov or .m4v; an existing file is replaced only with overwrite=true.
     Requires ffmpeg on PATH. The video is not framed or decorated."""
     import argparse as ap
-    a = ap.Namespace(input=str(_abs(input_video)), out=str(_abs(output_video)), device=device, landscape=landscape,
+    _valid_device(device, PREVIEW_SIZES)
+    out = _abs(output_video)
+    if out.suffix.lower() not in (".mp4", ".mov", ".m4v"):
+        raise ValueError("output_video must end in .mp4, .mov or .m4v")
+    if out.exists() and not overwrite:
+        raise ValueError(f"{out} already exists; pass overwrite=true to replace it")
+    a = ap.Namespace(input=str(_abs(input_video)), out=str(out), device=device, landscape=landscape,
                      fit=fit, pad_color="black", extend=extend)
 
     def run():

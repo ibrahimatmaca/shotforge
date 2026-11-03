@@ -11,10 +11,13 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from . import copywriter, palette as P, texts as T
-from .engine import DEVICES, FRAMES, PREVIEW_SIZES, STYLES, render_job
+from .engine import BG_PRESETS, DEVICES, FRAMES, PREVIEW_SIZES, STYLES, render_job, text_problems
 
 HERE = Path(__file__).resolve().parent
 IMG_EXT = {".png", ".jpg", ".jpeg", ".webp"}
+# copy dosyasında slayt başına değiştirilebilen alanlar; yol alan font/image gibi alanlar bilerek yok
+SLIDE_OVERRIDES = {"style", "frame", "text_position", "align", "bg_angle", "title_scale", "width", "perspective",
+                   "no_grain", "no_glow", "text_color", "accent", "glow", "deco", "frame_rim"}
 ASC_LOCALES = {"en": "en-US", "tr": "tr", "de": "de-DE", "fr": "fr-FR", "es": "es-ES", "it": "it", "pt": "pt-BR",
                "ja": "ja", "ko": "ko", "ru": "ru", "nl": "nl-NL", "ar": "ar-SA"}
 
@@ -70,8 +73,24 @@ def collect_shots(inputs) -> dict[str, Path]:
     return out
 
 
+def check_langs(langs: list[str]):
+    """Dil kodları klasör adı olur; yol içeremez."""
+    for l in langs:
+        if not isinstance(l, str) or not T.LANG_RE.fullmatch(l):
+            raise SystemExit(f"Geçersiz dil kodu: {l!r}  (örnek: en, tr, pt-BR)")
+
+
+def count_arg(v: str) -> str:
+    if v != "auto" and not (v.isdigit() and 1 <= int(v) <= 10):
+        raise argparse.ArgumentTypeError("1–10 arası bir sayı ya da auto olmalı")
+    return v
+
+
 def read_copy(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"Tasarım/metin dosyası geçerli JSON değil: {path} ({e})")
 
 
 def write_copy(path: Path, data: dict):
@@ -153,8 +172,8 @@ def run_interactive(inp: dict, shots: dict[str, Path], profile: dict, templates:
         elif v == "2":
             n = inp.get("count")
             if not n:
-                n = int(_ask("   Kaç sayfa yazacaksınız? (1–10): ", "7") or 7)
-                inp["count"] = max(1, min(10, n))
+                v = _ask("   Kaç sayfa yazacaksınız? (1–10): ", "7")
+                inp["count"] = max(1, min(10, int(v))) if v.isdigit() else 7
             print("   Biçim: 'Başlık | Alt başlık'. *kelime* = vurgu. Boş bırakırsanız o dil için Claude yazar.")
             print("   Ekran görüntüleri: " + ", ".join(shots))
             locked = []
@@ -213,15 +232,22 @@ def gather_inputs(a, shots: dict[str, Path], langs: list[str], templates: dict, 
 def cmd_plan(a, quiet=False) -> dict:
     shots = collect_shots(a.shots)
     langs = [l.strip() for l in a.langs.split(",") if l.strip()]
+    check_langs(langs)
     copy_path = Path(a.copy)
     if copy_path.exists() and not a.regen:
         if not quiet:
             print(f"Mevcut tasarım/metin dosyası kullanılıyor: {copy_path}  (yeniden üretmek için --regen)")
-        return read_copy(copy_path)
+        data = read_copy(copy_path)
+        if (a.app and a.app != data.get("app")) or set(shots) != set(data.get("shots") or {}):
+            print(f"UYARI: {copy_path} başka bir uygulamaya veya ekran görüntülerine ait; "
+                  "yeni girdiler kullanılmıyor (--regen ile yeniden üretin).", file=sys.stderr)
+        return data
 
     templates = list_templates()
     profile = P.analyze_shots(list(shots.values()))
     inp = gather_inputs(a, shots, langs, templates, profile)
+    if inp["template"] and inp["template"] not in templates:  # --template my.json
+        templates[inp["template"]] = load_template(inp["template"])
     ctx = dict(app=inp["app"], about=inp["about"], tone=a.tone, langs=langs, templates=templates, profile=profile,
                locked=inp["locked"],
                fixed=dict(colors=inp["colors"], count=inp["count"], template=inp["template"],
@@ -279,8 +305,13 @@ def slide_cfg(a, tpl, pal, idx, slide, shot_paths, names, warnings) -> dict:
     if getattr(a, "no_grain", False):
         cfg["no_grain"] = True
     for k, v in slide.items():  # copy dosyasında slayta elle yazılmış değerler
-        if k not in ("shot", "role", "title", "subtitle"):
+        if k in ("shot", "role", "title", "subtitle"):
+            continue
+        # bg yalnızca preset/degrade olabilir: görsel yolu dosya içeriğini çıktıya gömer
+        if k in SLIDE_OVERRIDES or (k == "bg" and (v in BG_PRESETS or all(P.is_hex(c) for c in str(v).split(",")))):
             cfg[k] = v
+        else:
+            warnings.append((idx + 1, f"copy dosyasındaki '{k}' alanı yok sayıldı."))
     if cfg["style"] == "alt":
         cfg["style"] = "tilt-right" if idx % 2 == 0 else "tilt-left"
     if cfg["style"] not in STYLES:
@@ -312,7 +343,12 @@ def cmd_render(a, data: dict | None = None):
     except ValueError as e:
         raise SystemExit(str(e))
     langs = [l.strip() for l in a.langs.split(",")] if getattr(a, "langs", None) else data["langs"]
+    check_langs(langs)
     shot_paths = {n: (copy_path.parent / p) for n, p in data["shots"].items()}
+    base = copy_path.parent.resolve()
+    outside = [n for n, p in shot_paths.items() if not p.resolve().is_relative_to(base)]
+    if outside:
+        print(f"UYARI: {copy_path} kendi klasörü dışındaki görselleri kullanıyor: {', '.join(outside)}", file=sys.stderr)
     if getattr(a, "shots", None):
         shot_paths.update(collect_shots(a.shots))
     for p in shot_paths.values():
@@ -324,11 +360,16 @@ def cmd_render(a, data: dict | None = None):
     out = Path(a.out)
     warnings: list = []
     cfgs = [slide_cfg(a, tpl, pal, i, s, shot_paths, names, warnings) for i, s in enumerate(slides)]
+    for lang in langs:
+        for i, cfg in enumerate(cfgs):
+            if not only or (i + 1) in only:
+                warnings += [(i + 1, f"[{lang}] {m}") for m in text_problems(cfg, lang)]
     grouped: dict[str, list[int]] = {}
     for n, msg in warnings:
         grouped.setdefault(msg, []).append(n)
-    for msg, nums in grouped.items():
-        print(f"UYARI: slayt {', '.join(map(str, nums))}: {msg}", file=sys.stderr)
+    a.warnings = [f"slayt {', '.join(map(str, nums))}: {msg}" for msg, nums in grouped.items()]
+    for w in a.warnings:
+        print(f"UYARI: {w}", file=sys.stderr)
     jobs = []
     for lang in langs:
         for idx, s in enumerate(slides):
@@ -510,8 +551,8 @@ def cmd_install_claude(a):
 
 
 def cmd_preview(a):
-    if not shutil.which("ffmpeg"):
-        raise SystemExit("ffmpeg bulunamadı. macOS: brew install ffmpeg")
+    if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
+        raise SystemExit("ffmpeg/ffprobe bulunamadı. macOS: brew install ffmpeg")
     w, h = PREVIEW_SIZES[a.device]
     if a.landscape:
         w, h = h, w
@@ -575,7 +616,7 @@ def add_design_args(p):
     g.add_argument("--bg-color", default=None, metavar="#HEX", help="ana arka plan rengi")
     g.add_argument("--text-color", default=None, metavar="#HEX", help="yazı rengi (okunaksızsa slayt başına uyarıyla düzeltilir)")
     g.add_argument("--accent", default=None, metavar="#HEX", help="vurgu rengi")
-    g.add_argument("--count", default="auto", help="sayfa (slayt) sayısı 1–10 | auto (6–7)")
+    g.add_argument("--count", default="auto", type=count_arg, help="sayfa (slayt) sayısı 1–10 | auto (6–7)")
     g.add_argument("--texts", default=None, metavar="DOSYA", help="kendi metinleriniz (.txt/.md/.json); eksikleri Claude tamamlar")
     g.add_argument("--category", default=None, choices=P.CATEGORIES, help="uygulama kategorisi (yoksa çıkarılır)")
     g.add_argument("--app", default=None, help="uygulama adı")
@@ -613,7 +654,7 @@ def main(argv=None):
     r.add_argument("--text-color", default=None, metavar="#HEX")
     r.add_argument("--accent", default=None, metavar="#HEX")
     add_render_args(r)
-    r.set_defaults(fn=lambda a: cmd_render(a))
+    r.set_defaults(fn=lambda a: cmd_render(a), langs=None)  # verilmezse copy dosyasındaki diller
 
     an = sub.add_parser("analyze", help="ekran görüntülerini analiz et ve kural motorunun 2D/3D şablon önerisini göster (Claude'suz)")
     an.add_argument("shots", nargs="+")
