@@ -394,7 +394,7 @@ OpenAI account's data terms still apply. Usage counts against *your* plan or API
 
 ## Status and known limitations
 
-Beta (v0.5). CI runs the test-suite on Linux with Python 3.10–3.14 and on macOS with Python 3.13.
+Beta (v0.5). CI runs the test-suite on Linux with Python 3.10–3.14 on every push and PR, and weekly on macOS with Python 3.13.
 
 - The `claude -p` path is covered by tests against a fake `claude` executable that mimics Claude Code's JSON envelope; please report
   anything that differs with your real installation. The MCP server was exercised with the official MCP client on `mcp` 1.30 and 2.3.
