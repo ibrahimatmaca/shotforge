@@ -501,6 +501,22 @@ def _locked_missing(locked, count, langs):
     return miss
 
 
+def ai_problem() -> str | None:
+    """'auto' seçiminin çalışmayacağı belliyse nedenini döner. Emin olunamazsa None: asıl çağrı hatayı gösterir."""
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return None
+    exe = shutil.which("claude")
+    if not exe:
+        return "no `claude` command and no ANTHROPIC_API_KEY. Install Claude Code or set the key to get AI headlines."
+    try:
+        status = json.loads(subprocess.run([exe, "auth", "status"], capture_output=True, text=True, timeout=15).stdout)
+        if status.get("loggedIn") is False:
+            return "`claude` isn't signed in. Run `claude auth login` and start again to get AI headlines."
+    except (OSError, ValueError, AttributeError, subprocess.TimeoutExpired):
+        pass
+    return None
+
+
 def plan(ctx, shot_paths: dict[str, Path], backend="auto", model=None, log=print):
     """ctx: app, about, tone, langs, fixed{colors,count,template,dimension,category}, locked[], profile, templates.
     Dönüş: ({'design':…, 'slides':[…]}, kullanılan_backend)"""
@@ -513,7 +529,7 @@ def plan(ctx, shot_paths: dict[str, Path], backend="auto", model=None, log=print
         log(f"All design decisions and copy came from you; {ai} was not called.")
         return finalize(None, ctx, shots), "user"
     if backend == "offline":
-        log("WARNING: offline mode: design decisions come from local rules and the copy is placeholder text.")
+        log("WARNING: offline mode: design decisions come from local rules and any text you didn't write is placeholder text.")
         count = ctx["fixed"].get("count") or max(len(ctx.get("locked") or []), auto_count(ctx.get("profile"), shots))
         return finalize({"slides": offline_slides(ctx["app"], shots, count, ctx["langs"])}, ctx, shots), "offline"
 

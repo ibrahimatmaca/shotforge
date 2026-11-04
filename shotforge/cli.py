@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -254,6 +255,34 @@ def _ask_valid(q: dict, parse):
     return ""
 
 
+def _shot_paths(v: str) -> list[str]:
+    """Yazılan yolu çözer: boşluklu düz yol, sürükle-bırak kaçışları ('a\\ b') ve birden çok dosya."""
+    if Path(v).expanduser().exists():
+        return [str(Path(v).expanduser())]
+    try:
+        return [str(Path(i).expanduser()) for i in shlex.split(v)]
+    except ValueError:
+        return [v]
+
+
+def ask_screenshots() -> list[str]:
+    """Ekran görüntüsü verilmediyse sorar. Bunlar olmadan üretim olmaz, bu yüzden varsayılanı yoktur."""
+    q = next(q for q in I.QUESTIONS if q["id"] == "screenshots")
+    print(f"  ({q['note']})")
+    for _ in range(3):
+        v = _ask(f"{q['question']} ")
+        if not v:
+            print("  Screenshots are required.")
+            continue
+        paths = _shot_paths(v)
+        try:
+            scan_shots(paths)
+            return paths
+        except (SystemExit, OSError) as e:
+            print(f"  {e}")
+    raise SystemExit("No screenshots given. Usage: shotforge create <folder or files>")
+
+
 def ask_store_questions(a, answers: dict) -> dict:
     """Mağaza, boyut, dil ve çıktı soruları. Tasarım soruları sonra run_interactive içinde sorulur."""
     qs = {q["id"]: q for q in I.QUESTIONS}
@@ -290,11 +319,21 @@ def ask_store_questions(a, answers: dict) -> dict:
     return answers
 
 
+def check_ai(a):
+    """AI yoksa soruları boşuna sordurup sonda yer tutucu metin veya hata göstermemek için en başta söyler."""
+    if a.ai not in ("auto", "claude") or not (why := copywriter.ai_problem()):
+        return
+    if a.ai == "claude":
+        raise SystemExit(f"Error: {why}")
+    print(f"\nNo AI available: {why}\nFor now you can write the headlines yourself when asked.")
+    a.ai, a.no_ai = "offline", True
+
+
 def should_ask(a) -> bool:
     return True if a.ask else (False if (a.no_ask or a.yes) else sys.stdin.isatty())
 
 
-def run_interactive(inp: dict, shots: dict[str, Path], profile: dict, templates: dict, langs: list[str]):
+def run_interactive(inp: dict, shots: dict[str, Path], profile: dict, templates: dict, langs: list[str], no_ai: bool = False):
     print("\n── Design questions ─────────────────────────────────────────────")
     print("Detected from the screenshots: main colour %s, UI theme %s, density %s" %
           (profile.get("brand") or "neutral", profile["ui"], profile["density"]))
@@ -330,7 +369,8 @@ def run_interactive(inp: dict, shots: dict[str, Path], profile: dict, templates:
             inp["count"] = int(v)
 
     if not inp.get("locked"):
-        v = _ask("4) Page text: [1] AI writes it  [2] I will write it  [3] From a file  (Enter = 1): ")
+        v = (_ask("4) Page text: [1] Placeholder text  [2] I will write it  [3] From a file  (Enter = 2): ", "2") if no_ai else
+             _ask("4) Page text: [1] AI writes it  [2] I will write it  [3] From a file  (Enter = 1): "))
         if v == "3":
             path = _ask("   Text file path (.txt/.md/.json): ")
             if path:
@@ -340,7 +380,8 @@ def run_interactive(inp: dict, shots: dict[str, Path], profile: dict, templates:
             if not n:
                 v = _ask("   How many pages will you write? (1–10): ", "7")
                 inp["count"] = max(1, min(10, int(v))) if v.isdigit() else 7
-            print("   Format: 'Title | Subtitle'. *word* = accent. Leave blank and the AI writes that language.")
+            print("   Format: 'Title | Subtitle'. *word* = accent. Leave blank and " +
+                  ("placeholder text fills that language." if no_ai else "the AI writes that language."))
             print("   Screenshots: " + ", ".join(shots))
             locked = []
             for i in range(inp["count"]):
@@ -378,7 +419,7 @@ def gather_inputs(a, shots: dict[str, Path], langs: list[str], templates: dict, 
     if inp["template"] and inp["template"] not in templates and not Path(inp["template"]).exists():
         raise SystemExit(f"Unknown template: {inp['template']}. Available: {', '.join(templates)}")
     if should_ask(a):
-        run_interactive(inp, shots, profile, templates, langs)
+        run_interactive(inp, shots, profile, templates, langs, getattr(a, "no_ai", False))
     if not inp["app"]:
         raise SystemExit("App name required: --app \"Name\" (or answer it in interactive mode).")
     if inp["count"] is None and inp["locked"]:
@@ -852,6 +893,12 @@ def write_brief(dest: Path, data: dict, tpl: dict, langs: list[str], device: str
 
 def cmd_create(a):
     r = None
+    if should_ask(a):
+        check_ai(a)
+    if not a.shots and not a.maestro:  # --maestro klasörü kendisi doldurur, aşağıda kontrol edilir
+        if not should_ask(a):
+            raise SystemExit("Screenshots required: shotforge create <folder or files>")
+        a.shots = ask_screenshots()
     if a.device:  # tek cihaz, eski düzen
         a.langs = a.langs or "en,tr"
     else:
@@ -1142,7 +1189,7 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     c = sub.add_parser("create", help="design decision + copy (AI) + separate images per page and language, in one command")
-    c.add_argument("shots", nargs="+", help="screenshot files or a folder")
+    c.add_argument("shots", nargs="*", help="screenshot files or a folder (asked for in a terminal if left out)")
     add_design_args(c)
     add_render_args(c)
     add_brand_args(c)
@@ -1228,7 +1275,8 @@ def main(argv=None):
     pv.add_argument("--extend", action="store_true")
     pv.set_defaults(fn=cmd_preview)
 
-    a = ap.parse_args(argv)
+    argv = sys.argv[1:] if argv is None else argv
+    a = ap.parse_args(argv or (["create"] if sys.stdin.isatty() else []))
     try:
         if hasattr(a, "brand"):
             apply_brand(a)

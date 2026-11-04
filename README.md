@@ -40,16 +40,28 @@ Requires Python 3.10+.
 
 ```bash
 # CLI
-pipx install "git+https://github.com/ibrahimatmaca/shotforge@v0.5.0"
+pipx install "git+https://github.com/ibrahimatmaca/shotforge"
 # CLI + MCP server
-pipx install "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0"
+pipx install "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge"
 # or run without installing (needs uv)
-uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0" shotforge-mcp
+uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge" shotforge-mcp
 
 shotforge doctor     # checks Python deps, ffmpeg (optional), claude CLI / API keys
 ```
 
-## Quick start (CLI)
+## Quick start
+
+```bash
+shotforge
+```
+
+Run it on its own in a terminal. It asks where your screenshots are, then everything else, including who writes the headlines (AI, you, or a file). Press Enter to accept a default.
+
+In Claude Code, install the slash command once with `shotforge install-claude --global`, then type `/store-shots`. The questions appear in the conversation.
+
+AI-written headlines need `claude auth login` or `ANTHROPIC_API_KEY`. Without either, shotforge tells you at the start and you write the headlines yourself.
+
+### With flags
 
 ```bash
 # 1) Let Claude decide everything (uses your logged-in `claude` CLI, or ANTHROPIC_API_KEY)
@@ -92,6 +104,7 @@ Without `-o`, output goes to `./shotforge-out/<app>/`. Add `--sheet` for a singl
 
 | Question | Flag | If left blank |
 |---|---|---|
+| Screenshots | `shotforge create <folder or files>` | required, asked again until given |
 | Store | `--store appstore\|playstore\|both` | both |
 | Header and Search Results images (App Store) | `--header-sizes 5244x2950,3840x2560,1920x1280\|no` | all three |
 | Languages | `--langs en,tr,de` | en, tr |
@@ -174,7 +187,7 @@ its own work. No API key is needed.
 ```bash
 # Claude Code
 claude mcp add shotforge -- shotforge-mcp
-#   (without installing:  claude mcp add shotforge -- uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0" shotforge-mcp)
+#   (without installing:  claude mcp add shotforge -- uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge" shotforge-mcp)
 ```
 
 Claude Desktop / Cursor / any MCP client (`claude_desktop_config.json` or the client's MCP settings):
@@ -184,7 +197,7 @@ Claude Desktop / Cursor / any MCP client (`claude_desktop_config.json` or the cl
   "mcpServers": {
     "shotforge": {
       "command": "uvx",
-      "args": ["--from", "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0", "shotforge-mcp"]
+      "args": ["--from", "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge", "shotforge-mcp"]
     }
   }
 }
@@ -210,8 +223,8 @@ Output goes to `~/shotforge-out` by default.
 shotforge install-claude --global      # writes ~/.claude/commands/store-shots.md
 ```
 
-`/store-shots ./screens "Habita" "habit tracker"` asks you the questions above before starting, runs `shotforge create`, opens
-the overview images and fixes problems it finds.
+Type `/store-shots` in Claude Code, in the terminal or the desktop app. It asks for your screenshots, app name and the questions above in the conversation, runs
+`shotforge create`, opens the overview images and fixes problems it finds. You can also give them up front: `/store-shots ./screens "Habita" "habit tracker"`.
 
 ## Brand file
 

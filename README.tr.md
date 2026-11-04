@@ -38,16 +38,28 @@ Python 3.10+ gerekir.
 
 ```bash
 # CLI
-pipx install "git+https://github.com/ibrahimatmaca/shotforge@v0.5.0"
+pipx install "git+https://github.com/ibrahimatmaca/shotforge"
 # CLI + MCP sunucusu
-pipx install "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0"
+pipx install "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge"
 # kurmadan çalıştırma (uv gerekir)
-uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0" shotforge-mcp
+uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge" shotforge-mcp
 
 shotforge doctor     # Python bağımlılıkları, ffmpeg (isteğe bağlı), claude CLI / API anahtarları kontrolü
 ```
 
-## Hızlı başlangıç (CLI)
+## Hızlı başlangıç
+
+```bash
+shotforge
+```
+
+Terminalde tek başına çalıştırın. Önce ekran görüntülerinin nerede olduğunu, sonra başlıkları kimin yazacağı (AI, siz ya da bir dosya) dahil diğer her şeyi sorar. Varsayılanı kabul etmek için Enter'a basın.
+
+Claude Code'da eğik çizgi komutunu bir kez `shotforge install-claude --global` ile kurun, sonra `/store-shots` yazın. Sorular sohbette görünür.
+
+Başlıkları AI'ın yazması için `claude auth login` veya `ANTHROPIC_API_KEY` gerekir. İkisi de yoksa shotforge bunu en başta söyler ve başlıkları siz yazarsınız.
+
+### Seçeneklerle
 
 ```bash
 # 1) Her şeyi Claude belirlesin (giriş yapmış `claude` CLI'nizi veya ANTHROPIC_API_KEY'i kullanır)
@@ -90,6 +102,7 @@ out/
 
 | Soru | Seçenek | Boş bırakılırsa |
 |---|---|---|
+| Ekran görüntüleri | `shotforge create <klasör veya dosyalar>` | zorunlu, verilene kadar tekrar sorulur |
 | Mağaza | `--store appstore\|playstore\|both` | ikisi |
 | Header and Search Results görselleri (App Store) | `--header-sizes 5244x2950,3840x2560,1920x1280\|no` | üçü de |
 | Diller | `--langs en,tr,de` | en, tr |
@@ -167,7 +180,7 @@ metinleri yazar ve araçları çağırır; shotforge çizer ve Claude'un kendi i
 ```bash
 # Claude Code
 claude mcp add shotforge -- shotforge-mcp
-#   (kurmadan:  claude mcp add shotforge -- uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0" shotforge-mcp)
+#   (kurmadan:  claude mcp add shotforge -- uvx --from "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge" shotforge-mcp)
 ```
 
 Claude Desktop / Cursor / diğer MCP istemcileri:
@@ -177,7 +190,7 @@ Claude Desktop / Cursor / diğer MCP istemcileri:
   "mcpServers": {
     "shotforge": {
       "command": "uvx",
-      "args": ["--from", "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge@v0.5.0", "shotforge-mcp"]
+      "args": ["--from", "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge", "shotforge-mcp"]
     }
   }
 }
@@ -195,7 +208,7 @@ Araçlar: `analyze_screenshots`, `list_templates`, `create_screenshots` (ayrı g
 shotforge install-claude --global      # ~/.claude/commands/store-shots.md
 ```
 
-`/store-shots ./ekranlar "Habita" "alışkanlık takibi"`: yukarıdaki soruları başlamadan sorar, `shotforge create`'i çalıştırır, önizlemeleri açıp sorunları düzeltir.
+Claude Code'da, terminalde ya da masaüstü uygulamasında `/store-shots` yazın. Ekran görüntülerini, uygulama adını ve yukarıdaki soruları sohbette sorar, `shotforge create`'i çalıştırır, önizlemeleri açıp sorunları düzeltir. İsterseniz baştan da verebilirsiniz: `/store-shots ./ekranlar "Habita" "alışkanlık takibi"`.
 
 ## Marka dosyası
 

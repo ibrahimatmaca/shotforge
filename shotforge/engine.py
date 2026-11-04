@@ -201,33 +201,41 @@ def resolve_font(weight: str, user_font: str | None) -> str:
 
 
 def parse_markup(text: str):
-    """'Çok *hızlı* başla' -> paragraflar: [[(kelime, vurgu_mu), ...], ...]"""
+    """'Çok *hızlı*, başla' -> paragraflar: [[(kelime, vurgu_mu, öncekine_bitişik_mi), ...], ...]"""
     paras, accent = [], False
     for line in text.split("\n"):
-        words = []
+        words, joined = [], False  # joined: önceki parçayla arada boşluk yok
         for i, seg in enumerate(line.split("*")):
             if i > 0:
                 accent = not accent
-            for w in seg.split():
-                words.append((w, accent))
+            if not seg:
+                continue
+            for j, w in enumerate(seg.split()):
+                words.append((w, accent, j == 0 and joined and not seg[0].isspace()))
+            joined = not seg[-1].isspace()
         paras.append(words)
     return paras
 
 
 def wrap(paras, font, max_w):
+    """Satırlar: [([(kelime, vurgu, genişlik, bitişik), ...], genişlik), ...]. Bitişik parçalar satır sonunda ayrılmaz."""
     space = font.getlength(" ")
     lines = []
     for words in paras:
-        cur, cur_w = [], 0.0
-        for w, acc in words:
-            ww = font.getlength(w)
-            add = ww if not cur else space + ww
-            if cur and cur_w + add > max_w:
-                lines.append((cur, cur_w))
-                cur, cur_w = [(w, acc, ww)], ww
+        units: list[list] = []
+        for w, acc, glued in words:
+            if glued and units:
+                units[-1].append((w, acc, font.getlength(w), True))
             else:
-                cur.append((w, acc, ww))
-                cur_w += add
+                units.append([(w, acc, font.getlength(w), False)])
+        cur, cur_w = [], 0.0
+        for unit in units:
+            uw = sum(part[2] for part in unit)
+            if cur and cur_w + space + uw > max_w:
+                lines.append((cur, cur_w))
+                cur, cur_w = [], 0.0
+            cur_w += uw + (space if cur else 0)
+            cur += unit
         if cur:
             lines.append((cur, cur_w))
     return lines, space
@@ -272,10 +280,11 @@ class TextBlock:
             asc = p["font"].getmetrics()[0]
             for words, width in p["lines"]:
                 x = dx + ((self.W - width) / 2 if self.align == "center" else self.margin)
-                for w, acc, ww in words:
+                for i, (w, acc, ww, glued) in enumerate(words):
+                    x += p["space"] if i and not glued else 0
                     fill = (*self.accent, 255) if (acc and p["accent_ok"]) else p["color"]
                     d.text((x, y + asc + (p["line_h"] - p["size"]) / 2 * 0.6), w, font=p["font"], fill=fill, anchor="ls")
-                    x += ww + p["space"]
+                    x += ww
                 y += p["line_h"]
 
 

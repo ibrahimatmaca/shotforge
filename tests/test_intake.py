@@ -1,4 +1,7 @@
 import builtins
+import json
+import shutil
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
@@ -101,3 +104,95 @@ def test_interactive_skips_header_question_for_play(monkeypatch, shots_dir, tmp_
     assert any("Which store" in p for p in prompts) and not any("Header" in p and "Create" in p for p in prompts)
     assert (tmp_path / "o" / "en" / "google-play" / "phone" / "01_home.png").exists()
     assert not (tmp_path / "o" / "en" / "app-store").exists()
+
+
+def _answers(monkeypatch, *replies):
+    prompts, left = [], list(replies)
+
+    def fake_input(prompt=""):
+        prompts.append(prompt)
+        return left.pop(0) if left and "screenshots" in prompt else ""
+    monkeypatch.setattr(builtins, "input", fake_input)
+    return prompts
+
+
+@pytest.mark.parametrize("dirname", ["shots", "my shots"])
+def test_create_asks_for_screenshots_and_retries(monkeypatch, shots_dir, tmp_path, dirname):
+    folder = tmp_path / dirname
+    shutil.copytree(shots_dir, folder)
+    prompts = _answers(monkeypatch, "", "/does/not/exist", str(folder))
+    cli.main(["create", "--app", "Demo", "--ai", "offline", "--ask", "--count", "1", "--jobs", "1", "--langs", "en",
+              "--store", "playstore", "-o", str(tmp_path / "o")])
+    assert sum("screenshots" in p for p in prompts) == 3
+    assert (tmp_path / "o" / "en" / "google-play" / "phone" / "01_home.png").exists()
+
+
+def test_screenshot_paths_accept_dragged_and_several():
+    assert cli._shot_paths("a\\ b/c.png 'd e.png'") == ["a b/c.png", "d e.png"]
+    assert cli._shot_paths("it's") == ["it's"]  # kapanmamış tırnak hata vermez, sonra 'bulunamadı' denir
+
+
+def test_create_gives_up_after_three_empty_answers(monkeypatch):
+    _answers(monkeypatch)
+    with pytest.raises(SystemExit, match="No screenshots given"):
+        cli.main(["create", "--ai", "offline", "--ask"])
+
+
+def test_create_without_screenshots_does_not_prompt_when_not_asking(monkeypatch):
+    monkeypatch.setattr(builtins, "input", lambda *_: pytest.fail("asked"))
+    with pytest.raises(SystemExit, match="Screenshots required"):
+        cli.main(["create", "--ai", "offline", "--no-ask"])
+
+
+def test_bare_command_starts_create_only_in_a_terminal(monkeypatch):
+    seen = []
+    monkeypatch.setattr(cli, "cmd_create", lambda a: seen.append(a.shots))
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True, raising=False)
+    cli.main([])
+    assert seen == [[]]
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False, raising=False)
+    with pytest.raises(SystemExit):
+        cli.main([])
+
+
+def _fake_claude(monkeypatch, out):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(copywriter.shutil, "which", lambda n: "/x/claude")
+    monkeypatch.setattr(copywriter.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=out))
+
+
+def test_ai_problem_detects_missing_and_signed_out(monkeypatch):
+    _fake_claude(monkeypatch, '{"loggedIn": false}')
+    assert "claude auth login" in copywriter.ai_problem()
+    _fake_claude(monkeypatch, '{"loggedIn": true}')
+    assert copywriter.ai_problem() is None
+    _fake_claude(monkeypatch, "unknown command")  # eski sürüm: asıl çağrıya bırakılır
+    assert copywriter.ai_problem() is None
+    monkeypatch.setattr(copywriter.shutil, "which", lambda n: None)
+    assert "ANTHROPIC_API_KEY" in copywriter.ai_problem()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy")
+    assert copywriter.ai_problem() is None
+
+
+def test_no_ai_is_said_first_and_user_writes_the_text(monkeypatch, shots_dir, tmp_path, capsys):
+    _fake_claude(monkeypatch, '{"loggedIn": false}')
+    prompts = []
+
+    def fake_input(prompt=""):
+        prompts.append(prompt)
+        return "Hello *there*" if "[en] text" in prompt else ""
+    monkeypatch.setattr(builtins, "input", fake_input)
+    copy = tmp_path / "o" / "shotforge.copy.json"
+    cli.main(["create", str(shots_dir), "--app", "Demo", "--ask", "--count", "1", "--jobs", "1", "--langs", "en",
+              "--store", "playstore", "-o", str(tmp_path / "o")])
+    out = capsys.readouterr().out
+    assert out.index("No AI available") < out.index("Store and output questions")
+    assert any("Enter = 2" in p for p in prompts)
+    assert json.loads(copy.read_text(encoding="utf-8"))["slides"][0]["title"]["en"] == "Hello *there*"
+
+
+def test_explicit_claude_stops_before_questions(monkeypatch, shots_dir):
+    _fake_claude(monkeypatch, '{"loggedIn": false}')
+    monkeypatch.setattr(builtins, "input", lambda *_: pytest.fail("asked"))
+    with pytest.raises(SystemExit, match="claude auth login"):
+        cli.main(["create", str(shots_dir), "--ai", "claude", "--ask"])

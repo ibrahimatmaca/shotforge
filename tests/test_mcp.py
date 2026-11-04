@@ -45,6 +45,13 @@ def test_intake_questions_tool(shots_dir):
     assert r["screenshot_defaults"]["template"] in {t["name"] for t in r["templates"]}
 
 
+def test_intake_starts_without_screenshots(shots_dir):
+    r = S.get_intake_questions()
+    assert [q["id"] for q in r["questions"]] == ["screenshots", "app", "about"] and "next_step" in r
+    assert "screenshots" not in {q["id"] for q in S.get_intake_questions([str(shots_dir)])["questions"]}
+    assert "ask for it first" in S.store_screenshots_prompt()
+
+
 def test_create_refuses_until_intake_is_done(shots_dir):
     with pytest.raises(S.ToolError, match="intake"):
         asyncio.run(S.create_screenshots([str(shots_dir)], "Demo"))
