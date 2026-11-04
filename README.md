@@ -213,8 +213,8 @@ Output goes to `~/shotforge-out` by default.
 shotforge install-claude --global      # writes ~/.claude/commands/store-shots.md
 ```
 
-`/store-shots ./screens "Habita" "habit tracker"` asks you the questions above before starting, runs `shotforge create`, opens
-the overview images and fixes problems it finds.
+Type `/store-shots` in Claude Code, in the terminal or the desktop app. It asks for your screenshots, app name and the questions above in the conversation, runs
+`shotforge create`, opens the overview images and fixes problems it finds. You can also give them up front: `/store-shots ./screens "Habita" "habit tracker"`.
 
 ## Brand file
 

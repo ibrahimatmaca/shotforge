@@ -198,7 +198,7 @@ Araçlar: `analyze_screenshots`, `list_templates`, `create_screenshots` (ayrı g
 shotforge install-claude --global      # ~/.claude/commands/store-shots.md
 ```
 
-`/store-shots ./ekranlar "Habita" "alışkanlık takibi"`: yukarıdaki soruları başlamadan sorar, `shotforge create`'i çalıştırır, önizlemeleri açıp sorunları düzeltir.
+Claude Code'da, terminalde ya da masaüstü uygulamasında `/store-shots` yazın. Ekran görüntülerini, uygulama adını ve yukarıdaki soruları sohbette sorar, `shotforge create`'i çalıştırır, önizlemeleri açıp sorunları düzeltir. İsterseniz baştan da verebilirsiniz: `/store-shots ./ekranlar "Habita" "alışkanlık takibi"`.
 
 ## Marka dosyası
 

@@ -39,8 +39,8 @@ mcp = _Server(
     "shotforge",
     instructions=(
         "Creates App Store and Google Play images (one separate file per page, per language) from the user's real app screenshots, "
-        "with 2D/3D device templates, headline text and colours. Workflow: (1) call get_intake_questions and ASK THE USER those "
-        "questions before generating anything; a blank or 'auto' answer means the returned default, (2) call analyze_screenshots "
+        "with 2D/3D device templates, headline text and colours. Workflow: (1) call get_intake_questions, with no shots if the user "
+        "hasn't given any, and ASK THE USER those questions in this conversation before generating anything; a blank or 'auto' answer means the returned default, (2) call analyze_screenshots "
         "and LOOK at the screenshots yourself, (3) call create_screenshots with intake_completed=true, the answers and the slide "
         "copy; everything left out is decided by shotforge's rules, background colour from the screenshots, (4) show the returned "
         "overview image and fix problems with render_screenshots. Output goes under <out>/<lang>/<store>/<target>/, plus a zip. "
@@ -143,18 +143,23 @@ def list_templates() -> list[dict]:
 
 @mcp.tool()
 @_safe
-def get_intake_questions(shots: list[str], app: str = "", about: str = "") -> dict:
-    """Call this FIRST. Returns the questions to ask the user before generating, with defaults computed from the screenshots.
+def get_intake_questions(shots: Optional[list[str]] = None, app: str = "", about: str = "") -> dict:
+    """Call this FIRST, even before the user has given screenshots. Without shots it returns only the questions needed to find
+    them; ask those, then call it again. With shots it returns the questions to ask before generating, with defaults computed from them.
     Ask them in your host's question UI (several short groups if it limits questions per call), else in one message. Skip
     anything the user already told you and questions whose `when` doesn't apply. A blank or 'auto' answer means the default.
     Each question has at most 4 options; offer other values through free text. answer_field names the create_screenshots
     argument when it differs from id. A default run renders many large images and can take a few minutes."""
+    if not shots:
+        first = ("screenshots", "app", "about")
+        return dict(questions=[q for q in I.QUESTIONS if q["id"] in first],
+                    next_step="Ask these, then call get_intake_questions again with shots set to the paths the user gave.")
     sm, sets = _collect_sets(shots)
     prof = P.analyze_shots(list(sm.values()))
     cat = P.infer_category(f"{app} {about}")
     name, dim, reasons = P.choose_template(cli.list_templates(), category=cat, profile=prof)
     return dict(
-        questions=I.QUESTIONS, templates=_templates_info(), detected_shot_sets=sorted(sets),
+        questions=[q for q in I.QUESTIONS if q["id"] != "screenshots"], templates=_templates_info(), detected_shot_sets=sorted(sets),
         screenshot_defaults=dict(colors=P.default_colors(prof), ui=prof["ui"], template=name, dimension=dim, reasons=reasons),
         output_layout="<out>/<lang>/app-store/{iphone-6.9,ipad-13,header-search,previews}/… and <out>/<lang>/google-play/"
                       "{phone,tablet-7,tablet-10,feature-graphic}/…, plus manifest.json and <app>.zip. layout='fastlane': "
@@ -441,10 +446,10 @@ async def convert_app_preview(input_video: str, output_video: str, device: str =
 
 
 @mcp.prompt(name="store_screenshots", description="Guided workflow: ask the intake questions, then create separate store images per language")
-def store_screenshots_prompt(folder: str, app: str = "", about: str = "") -> str:
+def store_screenshots_prompt(folder: str = "", app: str = "", about: str = "") -> str:
     return (
-        f"Create store images for the app '{app or 'ask the user'}' ({about or 'infer from the screenshots'}) from the real screenshots in {folder}.\n"
-        "1. Call get_intake_questions(shots=[folder], app, about) and ask the user those questions BEFORE generating anything. "
+        f"Create store images for the app '{app or 'ask the user'}' ({about or 'infer from the screenshots'}) from the real screenshots in {folder or 'a folder the user gives you; ask for it first'}.\n"
+        "1. Call get_intake_questions(shots=[folder], app, about), leaving shots out if there is no folder yet, and ask the user those questions in this conversation BEFORE generating anything. "
         "Skip what is already known. Blank or 'auto' means the returned default.\n"
         "2. Call analyze_screenshots and LOOK at every screenshot yourself.\n"
         "3. Write page copy in each language unless the user wrote it: benefit-first, max 5 words, *accent* words, subtitle one line. "

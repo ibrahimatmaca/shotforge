@@ -1,11 +1,15 @@
 ---
 description: Create App Store and Google Play images with shotforge (separate image per page, per language; 2D/3D templates)
-argument-hint: <screens_folder> "<App name>" "<what it does>" [2d|3d|template]
+argument-hint: [screens_folder] ["App name"] ["what it does"] [2d|3d|template]
 allowed-tools: Bash(shotforge:*), Read, Write, AskUserQuestion
 ---
 The user wants store images made from their real app screenshots. Arguments: $ARGUMENTS
-Reply in the user's language.
+Reply in the user's language. All arguments are optional: this conversation is where the user is guided, so ask here instead of stopping or telling them to use the terminal.
 
+0. Start with what is missing from the arguments, before running anything else:
+   - Screenshots: use AskUserQuestion with "Where do the screenshots come from?": a folder or files I have, or capture them with Maestro. Then ask in a plain message for the path; the user can paste it or drag the folder in. For Maestro also ask for the flows folder and the folder to write into.
+   - App name, and what the app does in 1-2 sentences (blank means inferred from the screens).
+   If `shotforge analyze` can't read the path, say why and ask again. Tell the user in one line what comes next: a few short question groups, then the images.
 1. Run `shotforge doctor` and tell the user about missing dependencies. Then run
    `shotforge analyze <folder> --about "<description>"` to read the detected colour / UI theme / density and the rule-based 2D/3D recommendation.
 2. Ask these BEFORE generating anything. Use AskUserQuestion in the groups below (it takes at most 4 questions per call; list your default
