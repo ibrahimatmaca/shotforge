@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -9,6 +10,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import textwrap
 import zipfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -1084,6 +1086,39 @@ def cmd_doctor(_):
     print(f"\n--ai auto selects this backend: {'claude' if c else ('api' if os.environ.get('ANTHROPIC_API_KEY') else 'offline')}")
 
 
+MCP_SOURCE = "shotforge[mcp] @ git+https://github.com/ibrahimatmaca/shotforge"
+MCP_TOOLS = {
+    "get_intake_questions": "the questions to ask you before generating anything",
+    "analyze_screenshots": "colour, theme and density analysis plus a 2D/3D recommendation",
+    "list_templates": "the 2D and 3D template catalogue",
+    "create_screenshots": "write separate images per page and language, plus an overview",
+    "render_screenshots": "redraw from shotforge.copy.json after editing it",
+    "convert_app_preview": "convert a screen recording to App Preview specs (ffmpeg)",
+}
+
+
+def cmd_mcp(_):
+    has_mcp = importlib.util.find_spec("mcp") is not None
+    server = shutil.which("shotforge-mcp")
+    print("Use shotforge from Claude or any MCP client. Your chat Claude is the designer, so no API key is needed.\n")
+    print("Status")
+    print(f"  {'✓' if has_mcp else '✗'} mcp package    {'installed' if has_mcp else 'not installed, so the server exits at startup'}")
+    print(f"  {'✓' if server else '✗'} shotforge-mcp  {server or 'not on PATH'}\n")
+    print("1. Install with the MCP extra")
+    print(f"  uv tool install --force \"{MCP_SOURCE}\"")
+    print(f"  pipx install --force \"{MCP_SOURCE}\"\n")
+    print("2. Connect your client")
+    print("  Claude Code:\n    claude mcp add shotforge -- shotforge-mcp")
+    print("  Claude Desktop, Cursor and others, in the client's MCP settings:")
+    config = {"mcpServers": {"shotforge": {"command": "shotforge-mcp"}}}
+    print(textwrap.indent(json.dumps(config, indent=2), "    "))
+    print("\n3. Ask your client")
+    print('  "Create store images from the screenshots in ./screens"\n')
+    print("Tools")
+    for name, about in MCP_TOOLS.items():
+        print(f"  {name:22s} {about}")
+
+
 def cmd_install_claude(a):
     src = (HERE / "data" / "claude_command.md").read_text(encoding="utf-8")
     dest_dir = (Path.home() / ".claude" / "commands") if a.global_ else (Path.cwd() / ".claude" / "commands")
@@ -1260,6 +1295,9 @@ def main(argv=None):
 
     d = sub.add_parser("doctor", help="check the installation and dependencies")
     d.set_defaults(fn=cmd_doctor)
+
+    mc = sub.add_parser("mcp", help="show how to install and connect the MCP server, and its status")
+    mc.set_defaults(fn=cmd_mcp)
 
     ic = sub.add_parser("install-claude", help="install the /store-shots slash command for Claude Code")
     ic.add_argument("--global", dest="global_", action="store_true", help="~/.claude/commands (all projects)")

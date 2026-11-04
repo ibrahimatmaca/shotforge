@@ -184,6 +184,8 @@ Per-slide layouts, colours and decorations come from `shotforge/templates/*.json
 what you want to fix, writes the copy, and calls the tools; shotforge renders and returns an overview image so Claude can check
 its own work. No API key is needed.
 
+Run `shotforge mcp` to see the setup steps, the tools and whether the server can start.
+
 ```bash
 # Claude Code
 claude mcp add shotforge -- shotforge-mcp

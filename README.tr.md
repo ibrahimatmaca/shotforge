@@ -177,6 +177,8 @@ Aile içinde: tema uyumu +3 (koyu renk → dark, çok açık → light, canlı o
 `shotforge-mcp` bir stdio MCP sunucusudur. MCP modunda **sohbetteki Claude tasarımcıdır**: ekranlara bakar, neyi belirlemek istediğinizi sorar,
 metinleri yazar ve araçları çağırır; shotforge çizer ve Claude'un kendi işini kontrol edebilmesi için önizleme görseli döndürür. API anahtarı gerekmez.
 
+Kurulum adımlarını, araçları ve sunucunun başlayıp başlayamayacağını görmek için `shotforge mcp` komutunu çalıştırın.
+
 ```bash
 # Claude Code
 claude mcp add shotforge -- shotforge-mcp

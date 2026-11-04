@@ -5,12 +5,16 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("mcp")
-from shotforge import mcp_server as S  # noqa: E402
+from shotforge import cli, mcp_server as S  # noqa: E402
 
 
 def test_tools_registered():
     names = {t.name for t in asyncio.run(S.mcp.list_tools())}
     assert {"list_templates", "analyze_screenshots", "create_screenshots", "render_screenshots", "convert_app_preview"} <= names
+
+
+def test_mcp_command_lists_every_tool():
+    assert set(cli.MCP_TOOLS) == {t.name for t in asyncio.run(S.mcp.list_tools())}
 
 
 def test_analyze_screenshots(shots_dir):
