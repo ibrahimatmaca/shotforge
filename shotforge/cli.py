@@ -319,11 +319,21 @@ def ask_store_questions(a, answers: dict) -> dict:
     return answers
 
 
+def check_ai(a):
+    """AI yoksa soruları boşuna sordurup sonda yer tutucu metin veya hata göstermemek için en başta söyler."""
+    if a.ai not in ("auto", "claude") or not (why := copywriter.ai_problem()):
+        return
+    if a.ai == "claude":
+        raise SystemExit(f"Error: {why}")
+    print(f"\nNo AI available: {why}\nFor now you can write the headlines yourself when asked.")
+    a.ai, a.no_ai = "offline", True
+
+
 def should_ask(a) -> bool:
     return True if a.ask else (False if (a.no_ask or a.yes) else sys.stdin.isatty())
 
 
-def run_interactive(inp: dict, shots: dict[str, Path], profile: dict, templates: dict, langs: list[str]):
+def run_interactive(inp: dict, shots: dict[str, Path], profile: dict, templates: dict, langs: list[str], no_ai: bool = False):
     print("\n── Design questions ─────────────────────────────────────────────")
     print("Detected from the screenshots: main colour %s, UI theme %s, density %s" %
           (profile.get("brand") or "neutral", profile["ui"], profile["density"]))
@@ -359,7 +369,8 @@ def run_interactive(inp: dict, shots: dict[str, Path], profile: dict, templates:
             inp["count"] = int(v)
 
     if not inp.get("locked"):
-        v = _ask("4) Page text: [1] AI writes it  [2] I will write it  [3] From a file  (Enter = 1): ")
+        v = (_ask("4) Page text: [1] Placeholder text  [2] I will write it  [3] From a file  (Enter = 2): ", "2") if no_ai else
+             _ask("4) Page text: [1] AI writes it  [2] I will write it  [3] From a file  (Enter = 1): "))
         if v == "3":
             path = _ask("   Text file path (.txt/.md/.json): ")
             if path:
@@ -369,7 +380,8 @@ def run_interactive(inp: dict, shots: dict[str, Path], profile: dict, templates:
             if not n:
                 v = _ask("   How many pages will you write? (1–10): ", "7")
                 inp["count"] = max(1, min(10, int(v))) if v.isdigit() else 7
-            print("   Format: 'Title | Subtitle'. *word* = accent. Leave blank and the AI writes that language.")
+            print("   Format: 'Title | Subtitle'. *word* = accent. Leave blank and " +
+                  ("placeholder text fills that language." if no_ai else "the AI writes that language."))
             print("   Screenshots: " + ", ".join(shots))
             locked = []
             for i in range(inp["count"]):
@@ -407,7 +419,7 @@ def gather_inputs(a, shots: dict[str, Path], langs: list[str], templates: dict, 
     if inp["template"] and inp["template"] not in templates and not Path(inp["template"]).exists():
         raise SystemExit(f"Unknown template: {inp['template']}. Available: {', '.join(templates)}")
     if should_ask(a):
-        run_interactive(inp, shots, profile, templates, langs)
+        run_interactive(inp, shots, profile, templates, langs, getattr(a, "no_ai", False))
     if not inp["app"]:
         raise SystemExit("App name required: --app \"Name\" (or answer it in interactive mode).")
     if inp["count"] is None and inp["locked"]:
@@ -881,6 +893,8 @@ def write_brief(dest: Path, data: dict, tpl: dict, langs: list[str], device: str
 
 def cmd_create(a):
     r = None
+    if should_ask(a):
+        check_ai(a)
     if not a.shots and not a.maestro:  # --maestro klasörü kendisi doldurur, aşağıda kontrol edilir
         if not should_ask(a):
             raise SystemExit("Screenshots required: shotforge create <folder or files>")

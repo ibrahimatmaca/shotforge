@@ -1,5 +1,7 @@
 import builtins
+import json
 import shutil
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
@@ -151,3 +153,46 @@ def test_bare_command_starts_create_only_in_a_terminal(monkeypatch):
     monkeypatch.setattr("sys.stdin.isatty", lambda: False, raising=False)
     with pytest.raises(SystemExit):
         cli.main([])
+
+
+def _fake_claude(monkeypatch, out):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(copywriter.shutil, "which", lambda n: "/x/claude")
+    monkeypatch.setattr(copywriter.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=out))
+
+
+def test_ai_problem_detects_missing_and_signed_out(monkeypatch):
+    _fake_claude(monkeypatch, '{"loggedIn": false}')
+    assert "claude auth login" in copywriter.ai_problem()
+    _fake_claude(monkeypatch, '{"loggedIn": true}')
+    assert copywriter.ai_problem() is None
+    _fake_claude(monkeypatch, "unknown command")  # eski sürüm: asıl çağrıya bırakılır
+    assert copywriter.ai_problem() is None
+    monkeypatch.setattr(copywriter.shutil, "which", lambda n: None)
+    assert "ANTHROPIC_API_KEY" in copywriter.ai_problem()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy")
+    assert copywriter.ai_problem() is None
+
+
+def test_no_ai_is_said_first_and_user_writes_the_text(monkeypatch, shots_dir, tmp_path, capsys):
+    _fake_claude(monkeypatch, '{"loggedIn": false}')
+    prompts = []
+
+    def fake_input(prompt=""):
+        prompts.append(prompt)
+        return "Hello *there*" if "[en] text" in prompt else ""
+    monkeypatch.setattr(builtins, "input", fake_input)
+    copy = tmp_path / "o" / "shotforge.copy.json"
+    cli.main(["create", str(shots_dir), "--app", "Demo", "--ask", "--count", "1", "--jobs", "1", "--langs", "en",
+              "--store", "playstore", "-o", str(tmp_path / "o")])
+    out = capsys.readouterr().out
+    assert out.index("No AI available") < out.index("Store and output questions")
+    assert any("Enter = 2" in p for p in prompts)
+    assert json.loads(copy.read_text(encoding="utf-8"))["slides"][0]["title"]["en"] == "Hello *there*"
+
+
+def test_explicit_claude_stops_before_questions(monkeypatch, shots_dir):
+    _fake_claude(monkeypatch, '{"loggedIn": false}')
+    monkeypatch.setattr(builtins, "input", lambda *_: pytest.fail("asked"))
+    with pytest.raises(SystemExit, match="claude auth login"):
+        cli.main(["create", str(shots_dir), "--ai", "claude", "--ask"])
