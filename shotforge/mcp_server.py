@@ -30,7 +30,7 @@ except ImportError:
         from mcp.server.fastmcp import FastMCP as _Server, Image
         from mcp.server.fastmcp.exceptions import ToolError
     except ImportError as e:  # pragma: no cover
-        raise SystemExit('The MCP server needs the "mcp" package:  pip install "shotforge[mcp]"') from e
+        raise SystemExit('The MCP server needs the "mcp" package:  pip install "shotforge[mcp]"\nSetup guide:  shotforge mcp') from e
 
 from . import brand as B, cli, copywriter, intake as I, palette as P
 from .engine import DEVICES, PREVIEW_SIZES
@@ -462,7 +462,8 @@ def store_screenshots_prompt(folder: str = "", app: str = "", about: str = "") -
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="shotforge-mcp", description="shotforge MCP server (stdio)")
+    ap = argparse.ArgumentParser(prog="shotforge-mcp", description="shotforge MCP server (stdio)",
+                                 epilog="Your MCP client starts this command. For setup steps, run: shotforge mcp")
     ap.add_argument("--version", action="store_true")
     a = ap.parse_args(argv)
     if a.version:

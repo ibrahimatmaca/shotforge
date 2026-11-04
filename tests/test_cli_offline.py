@@ -47,3 +47,11 @@ def test_templates_and_rules_commands(capsys):
     assert "2D" in out and "3D" in out and "heartbeat" in out
     run("rules")
     assert "2D / 3D" in capsys.readouterr().out
+
+
+def test_mcp_command_shows_setup_without_the_mcp_package(monkeypatch, capsys):
+    monkeypatch.setattr("importlib.util.find_spec", lambda name: None)
+    run("mcp")
+    out = capsys.readouterr().out
+    assert "✗ mcp package" in out and "not installed" in out
+    assert "shotforge[mcp] @ git+" in out and "claude mcp add shotforge -- shotforge-mcp" in out

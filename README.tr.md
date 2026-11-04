@@ -177,6 +177,8 @@ Aile içinde: tema uyumu +3 (koyu renk → dark, çok açık → light, canlı o
 `shotforge-mcp` bir stdio MCP sunucusudur. MCP modunda **sohbetteki Claude tasarımcıdır**: ekranlara bakar, neyi belirlemek istediğinizi sorar,
 metinleri yazar ve araçları çağırır; shotforge çizer ve Claude'un kendi işini kontrol edebilmesi için önizleme görseli döndürür. API anahtarı gerekmez.
 
+Kurulum adımlarını, araçları ve sunucunun başlayıp başlayamayacağını görmek için `shotforge mcp` komutunu çalıştırın.
+
 ```bash
 # Claude Code
 claude mcp add shotforge -- shotforge-mcp
@@ -365,7 +367,7 @@ Kullanım *sizin* planınızdan/API faturanızdan düşer. Modelin çıktısı d
 
 ## Durum ve bilinen sınırlar
 
-Beta (v0.5). CI, testleri Linux'ta Python 3.10–3.14 ile, macOS'ta Python 3.13 ile çalıştırır.
+Beta (v0.5). CI, testleri her push ve PR'da Linux'ta Python 3.10–3.14 ile, haftada bir de macOS'ta Python 3.13 ile çalıştırır.
 
 - `claude -p` yolu, Claude Code'un JSON zarfını taklit eden sahte bir `claude` ile test edilir; gerçek kurulumunuzda farklı bir şey görürseniz lütfen bildirin.
   MCP sunucusu resmi MCP istemcisiyle `mcp` 1.30 ve 2.3 üzerinde denendi.

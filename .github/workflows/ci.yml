@@ -9,16 +9,12 @@ permissions:
 
 jobs:
   test:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
         python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        include:  # one macOS job: hosted macOS runners are scarce and jobs can be cancelled without a runner
-          - os: macos-latest
-            python: "3.13"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
