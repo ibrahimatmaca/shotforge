@@ -32,7 +32,7 @@ except ImportError:
     except ImportError as e:  # pragma: no cover
         raise SystemExit('The MCP server needs the "mcp" package:  pip install "shotforge[mcp]"') from e
 
-from . import cli, copywriter, intake as I, palette as P
+from . import brand as B, cli, copywriter, intake as I, palette as P
 from .engine import DEVICES, PREVIEW_SIZES
 
 mcp = _Server(
@@ -43,7 +43,9 @@ mcp = _Server(
         "questions before generating anything; a blank or 'auto' answer means the returned default, (2) call analyze_screenshots "
         "and LOOK at the screenshots yourself, (3) call create_screenshots with intake_completed=true, the answers and the slide "
         "copy; everything left out is decided by shotforge's rules, background colour from the screenshots, (4) show the returned "
-        "overview image and fix problems with render_screenshots. Output goes under <out>/<lang>/<store>/<target>/, plus a zip."
+        "overview image and fix problems with render_screenshots. Output goes under <out>/<lang>/<store>/<target>/, plus a zip. "
+        "layout='fastlane' writes fastlane deliver and supply folders instead. For a store listing test, call create_screenshots "
+        "once per variant with its own out_dir and a different template or a different messaging angle."
     ),
 )
 
@@ -155,22 +157,26 @@ def get_intake_questions(shots: list[str], app: str = "", about: str = "") -> di
         questions=I.QUESTIONS, templates=_templates_info(), detected_shot_sets=sorted(sets),
         screenshot_defaults=dict(colors=P.default_colors(prof), ui=prof["ui"], template=name, dimension=dim, reasons=reasons),
         output_layout="<out>/<lang>/app-store/{iphone-6.9,ipad-13,header-search,previews}/… and <out>/<lang>/google-play/"
-                      "{phone,tablet-7,tablet-10,feature-graphic}/…, plus manifest.json and <app>.zip",
+                      "{phone,tablet-7,tablet-10,feature-graphic}/…, plus manifest.json and <app>.zip. layout='fastlane': "
+                      "<out>/fastlane/screenshots/<locale>/… and <out>/fastlane/metadata/android/<locale>/images/…",
     )
 
 
 @mcp.tool()
 @_safe
 def analyze_screenshots(shots: list[str], app: str = "", about: str = "", category: Optional[str] = None,
-                        dimension: str = "auto", background_color: Optional[str] = None, tone: str = "") -> dict:
+                        dimension: str = "auto", background_color: Optional[str] = None, tone: str = "",
+                        keywords: Optional[list[str]] = None) -> dict:
     """Analyse app screenshots locally (dominant brand colour, light/dark UI, visual density) and return shotforge's
     rule-based 2D/3D template recommendation with reasons, plus the rules and template catalogue.
     Use this first; then look at the screenshots yourself and decide the design.
 
     shots: absolute paths of image files or of a folder containing them.
     category: one of fitness, health, finance, social, education, productivity, games, photo, travel, shopping,
-              entertainment, lifestyle, utilities (inferred from app/about when omitted)."""
+              entertainment, lifestyle, utilities (inferred from app/about when omitted).
+    keywords: search keywords the slide copy should target; they are added to copy_guidance."""
     sm = _collect(shots)
+    keywords = copywriter.parse_keywords(keywords)
     prof = P.analyze_shots(list(sm.values()))
     cat = category or P.infer_category(f"{app} {about}")
     if cat and cat not in P.CATEGORIES:
@@ -184,12 +190,20 @@ def analyze_screenshots(shots: list[str], app: str = "", about: str = "", catego
         rules=P.RULES_TEXT, templates=_templates_info(),
         copy_guidance=("Titles: benefit-first, max 5 words (~34 chars); wrap 1-3 key words in *asterisks* for the accent colour; "
                        "subtitle: one short line (~60 chars). Slide 1 = main promise, middle = one benefit each, last = reassurance/CTA. "
-                       "Write natural marketing copy per language, never word-for-word translation. Do not invent claims."),
+                       "Write natural marketing copy per language, never word-for-word translation. Do not invent claims."
+                       + (f" Work in these search keywords where they read naturally, at most one or two per slide, using the term people "
+                          f"really search for in each language: {', '.join(keywords)}." if keywords else "")),
     )
 
 
+def _brand(path: Optional[str]) -> dict:
+    return B.load(_abs(path)) if path else {}
+
+
 def _create(shots, app, slides, langs, template, dimension, background_color, text_color, accent_color, count, about,
-            category, tone, out_dir, device, layout, fmt, only, jobs, style, *, targets=None, previews=None, icon=None, banner=None):
+            category, tone, out_dir, device, layout, fmt, only, jobs, style, *, targets=None, previews=None, icon=None, banner=None,
+            keywords=None, font=None, logo=None):
+    keywords = copywriter.parse_keywords(keywords)
     langs = [l.strip() for l in langs if l.strip()] or ["en"]
     cli.check_langs(langs)
     sm, sets = _collect_sets(shots, langs)
@@ -233,9 +247,13 @@ def _create(shots, app, slides, langs, template, dimension, background_color, te
         full["targets"] = targets
     if banner:
         full["banner"] = {k: banner[k] for k in ("title", "subtitle") if banner.get(k)}
+    if keywords:
+        full["keywords"] = keywords
     cli.write_copy(copy_path, full)
-    result = _render(copy_path, out, device, layout, fmt, only, jobs, style, langs, previews=previews, icon=icon)
+    result = _render(copy_path, out, device, layout, fmt, only, jobs, style, langs, previews=previews, icon=icon, font=font, logo=logo)
     result["design"] = data["design"]
+    if keywords:
+        result["keywords_not_found_word_for_word"] = copywriter.keyword_gaps(data["slides"], keywords)
     if placeholder:
         result["warning"] = ("Some slide text was missing and was filled with generic placeholder copy. "
                              "Write the missing titles/subtitles yourself and call create_screenshots again (or edit "
@@ -244,12 +262,13 @@ def _create(shots, app, slides, langs, template, dimension, background_color, te
     return result
 
 
-def _render(copy_path: Path, out: Path, device, layout, fmt, only, jobs, style, langs=None, overrides=None, previews=None, icon=None):
+def _render(copy_path: Path, out: Path, device, layout, fmt, only, jobs, style, langs=None, overrides=None, previews=None, icon=None,
+            font=None, logo=None):
     import argparse as ap
     ov = overrides or {}
     a = ap.Namespace(
         copy=str(copy_path), out=str(out), device=device, layout=layout, format=fmt, jobs=jobs, style=style or None, bg=None,
-        frame=None, text_position=None, align=None, font=None, perspective=None, no_grain=False,
+        frame=None, text_position=None, align=None, font=font, logo=logo, perspective=None, no_grain=False,
         only=",".join(map(str, only)) if only else None, sheet=False, brief=False, shots=[],
         template=ov.get("template"), bg_color=ov.get("background"), text_color=ov.get("text"), accent=ov.get("accent"),
         langs=",".join(langs) if langs else None, previews=previews, icon=str(_abs(icon)) if icon else None)
@@ -286,7 +305,7 @@ async def create_screenshots(
     count: Optional[int] = None,
     about: str = "",
     category: Optional[str] = None,
-    tone: str = "confident, friendly, benefit-first",
+    tone: str = cli.DEFAULT_TONE,
     out_dir: Optional[str] = None,
     device: Optional[str] = None,
     layout: Optional[str] = None,
@@ -302,6 +321,8 @@ async def create_screenshots(
     icon: Optional[str] = None,
     banner: Optional[dict[str, Any]] = None,
     output: Optional[str] = None,
+    keywords: Optional[list[str]] = None,
+    brand_file: Optional[str] = None,
 ) -> list:
     """Create store images: ONE SEPARATE IMAGE FILE per page per language, for every store target.
 
@@ -322,20 +343,32 @@ async def create_screenshots(
     template/dimension: 'auto' lets shotforge's rules choose (2D = flat/in-plane phone, 3D = perspective phone). Use
         list_templates for names. background_color/text_color/accent_color: '#RRGGBB' (optional; text colour is auto-fixed if unreadable).
     count: number of pages 1-10 (defaults to len(slides), else 6-7).
-    layout: 'store' (default), 'flat' (out/<lang>/NN_name.png, one device) or 'asc' (out/<locale>/<DISPLAY_TYPE>/NN_name.png).
+    layout: 'store' (default), 'flat' (out/<lang>/NN_name.png, one device), 'asc' (out/<locale>/<DISPLAY_TYPE>/NN_name.png) or
+        'fastlane' (out/fastlane/screenshots/<locale>/… and out/fastlane/metadata/android/<locale>/images/…).
+    keywords: the search keywords your slide copy targets; the result lists any not found word for word.
+    brand_file: path to a shotforge.toml; it fills template, colours, tone and langs you left out, and adds its font and logo.
     only: render only these 1-based page numbers (faster iteration). Returns file paths and a small overview image."""
     if not intake_completed:
         raise ToolError("Ask the user the get_intake_questions questions first, then call again with intake_completed=true. "
                         "Blank answers are fine: they become defaults.")
     targets = resolved_previews = None
-    resolved_langs = langs or list(I.DEFAULT_LANGS)
+    b = _brand(brand_file)
+    colors = b.get("colors") or {}
+    background_color, text_color = background_color or colors.get("background"), text_color or colors.get("text")
+    accent_color = accent_color or colors.get("accent")
+    if template in (None, "", "auto") and b.get("template") and dimension in (None, "", "auto"):
+        template = b["template"]
+    if tone == cli.DEFAULT_TONE:
+        tone = b.get("tone") or tone
+    resolved_langs = langs or b.get("langs") or list(I.DEFAULT_LANGS)
     if not device:
         r = I.resolve(dict(store=store, header_sizes=header_sizes, langs=resolved_langs, devices=devices, previews=previews, output=output))
         targets, resolved_previews = r["targets"], r["previews"]
     out_dir = out_dir or (f"~/shotforge-out/{I.slug(app)}" if not device else "~/shotforge-out")
     res = await asyncio.to_thread(_create, shots, app, slides, resolved_langs, template, dimension, background_color,
                                   text_color, accent_color, count, about, category, tone, out_dir, device, layout,
-                                  format, only, jobs, style, targets=targets, previews=resolved_previews, icon=icon, banner=banner)
+                                  format, only, jobs, style, targets=targets, previews=resolved_previews, icon=icon or b.get("logo"), banner=banner,
+                                  keywords=keywords, font=b.get("font"), logo=b.get("logo"))
     content: list = [json.dumps(res, ensure_ascii=False, indent=2)]
     if Path(res["overview"]).exists():
         content.append(Image(path=res["overview"]))
@@ -357,9 +390,11 @@ async def render_screenshots(
     format: str = "png",
     jobs: int = 2,
     icon: Optional[str] = None,
+    brand_file: Optional[str] = None,
 ) -> list:
     """Re-render from a shotforge.copy.json (written by create_screenshots, editable by hand): use after fixing text or
-    trying another template/colours. Overrides are optional. Returns file paths and a small overview image."""
+    trying another template/colours. Overrides are optional. Pass brand_file again if the images use its font and logo.
+    Returns file paths and a small overview image."""
     cp = _abs(copy_file)
     if not cp.exists():
         raise ValueError(f"copy file not found: {cp}")
@@ -371,7 +406,9 @@ async def render_screenshots(
     out = _abs(out_dir) if out_dir else cp.parent
     ov = dict(template=template, background=_valid_hex(background_color, "background_color"),
               text=_valid_hex(text_color, "text_color"), accent=_valid_hex(accent_color, "accent_color"))
-    res = await asyncio.to_thread(_render, cp, out, device, layout, format, only, jobs, None, None, ov, None, icon)
+    b = _brand(brand_file)
+    res = await asyncio.to_thread(_render, cp, out, device, layout, format, only, jobs, None, None, ov, None, icon or b.get("logo"),
+                                  b.get("font"), b.get("logo"))
     content: list = [json.dumps(res, ensure_ascii=False, indent=2)]
     if Path(res["overview"]).exists():
         content.append(Image(path=res["overview"]))

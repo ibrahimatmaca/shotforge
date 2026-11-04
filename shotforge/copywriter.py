@@ -31,6 +31,7 @@ LANG_NAMES = {
 DEFAULT_MODEL_API = "claude-sonnet-5-5"
 DEFAULT_MODEL_OPENAI = "gpt-6.1-sol"
 AUTO_COUNT_RANGE = (6, 7)
+MAX_KEYWORDS, MAX_KEYWORD_LEN = 20, 60
 
 PROMPT = """You are an expert App Store (ASO) copywriter AND visual designer. Look at the real app screenshots listed below
 (read every one of them), then make the design decisions and write the text for a set of App Store screenshot slides.
@@ -66,7 +67,7 @@ YOU DECIDE EVERYTHING THAT IS NOT FIXED ABOVE:
    reassurance / call to action. Each slide uses ONE screenshot (exact file name); reuse is allowed when there are fewer
    screenshots than slides, but every screenshot must be used at least once.
 {locked}
-TEXT RULES
+{keywords}{variant}TEXT RULES
 - Languages: {lang_list}. Write every text in every language. Do NOT translate word for word; write natural, persuasive
   marketing copy in each language (Turkish must sound native).
 - Title: benefit-first, max 5 words, max ~34 characters per language. Wrap the 1-3 most important words in *asterisks* for
@@ -142,6 +143,47 @@ def locked_block(ctx) -> str:
             "complete list:\n" + json.dumps(d, ensure_ascii=False))
 
 
+def parse_keywords(v) -> list[str]:
+    """'a, b' veya liste: boşlukları sadeleştirir, tekrarları atar. Sınır, istemin şişmesini önler."""
+    items = v.split(",") if isinstance(v, str) else list(v or [])
+    out: dict[str, str] = {}
+    for k in items:
+        k = " ".join(str(k).split())
+        if len(k) > MAX_KEYWORD_LEN:
+            raise ValueError(f"keyword is too long (max {MAX_KEYWORD_LEN} characters): {k[:30]}…")
+        if k:
+            out.setdefault(k.casefold(), k)
+    if len(out) > MAX_KEYWORDS:
+        raise ValueError(f"at most {MAX_KEYWORDS} keywords are allowed, got {len(out)}")
+    return list(out.values())
+
+
+def keywords_block(ctx) -> str:
+    kw = ctx.get("keywords") or []
+    if not kw:
+        return ""
+    return ("TARGET SEARCH KEYWORDS (ASO): " + ", ".join(kw) + "\n"
+            "- Work these into titles and subtitles where they read naturally and match what the slide shows; at most one or "
+            "two per slide. In other languages use the term people really search for, not a literal translation.\n"
+            "- Readability and the length limits below come first: leave a keyword out rather than stuffing it. Never use a "
+            "keyword to imply a feature the screenshots don't show.\n\n")
+
+
+def variant_block(ctx) -> str:
+    v = ctx.get("variant")
+    if not v:
+        return ""
+    return (f"STORE TEST VARIANT {v['letter'].upper()} of {v['total']}: these slides compete against other variants in a "
+            f"store listing test, so commit to one messaging angle: {v['angle']}. Keep every other rule.\n\n")
+
+
+def keyword_gaps(slides: list[dict], keywords: list[str]) -> list[str]:
+    """Hiçbir slaytta, hiçbir dilde geçmeyen anahtar kelimeler. Yerel karşılık kullanılmışsa burada eksik görünür."""
+    text = " ".join(str(x) for s in slides for key in ("title", "subtitle") for x in (s.get(key) or {}).values())
+    text = " ".join(text.replace("*", "").casefold().split())
+    return [k for k in keywords if not re.search(rf"(?<!\w){re.escape(k.casefold())}(?!\w)", text)]
+
+
 def build_prompt(ctx, shots, shot_paths=None, claude_mode=False) -> str:
     langs = ctx["langs"]
     lines = []
@@ -156,7 +198,7 @@ def build_prompt(ctx, shots, shot_paths=None, claude_mode=False) -> str:
         categories=", ".join(P.CATEGORIES), category=ctx["fixed"].get("category") or "",
         tone=ctx["tone"], shot_list="\n".join(lines), facts=facts_block(ctx.get("profile")),
         templates=templates_block(ctx["templates"]), rules=P.RULES_TEXT, fixed=fixed_block(ctx),
-        count_rule=count_rule, locked=locked_block(ctx),
+        count_rule=count_rule, locked=locked_block(ctx), keywords=keywords_block(ctx), variant=variant_block(ctx),
         lang_list=", ".join(f"{l} = {LANG_NAMES.get(l, l)}" for l in langs),
         lang_keys=", ".join(f'"{l}": "..."' for l in langs))
 

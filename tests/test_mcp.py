@@ -65,3 +65,23 @@ def test_render_keeps_targets_from_copy_file(shots_dir, tmp_path):
                                      out_dir=str(tmp_path / "o"), store="playstore"))
     res = asyncio.run(S.render_screenshots(str(tmp_path / "o" / "shotforge.copy.json"), jobs=1))
     assert any("google-play/phone" in f for f in json.loads(res[0])["files"]["en"])
+
+
+def test_create_fastlane_with_brand_and_keywords(shots_dir, tmp_path):
+    """_render builds its Namespace by hand: new layouts and render fields must also work through MCP."""
+    from PIL import Image
+    Image.new("RGBA", (200, 100), (255, 0, 0, 255)).save(tmp_path / "logo.png")
+    (tmp_path / "shotforge.toml").write_text('[brand]\ntone = "calm"\nlogo = "logo.png"\ntemplate = "bubble"\n[brand.colors]\nbackground = "#123456"\n', encoding="utf-8")
+    slides = [{"shot": "01_home.png", "title": {"en": "Build a *habit*"}, "subtitle": {"en": "Sub"}}]
+    res = json.loads(asyncio.run(S.create_screenshots(
+        [str(shots_dir)], "Demo", slides, ["en"], intake_completed=True, out_dir=str(tmp_path / "o"), layout="fastlane", jobs=1,
+        store="both", header_sizes=["no"], keywords=["habit", "focus"], brand_file=str(tmp_path / "shotforge.toml")))[0])
+    assert res["design"]["template"] == "bubble" and res["design"]["colors"]["background"] == "#123456"
+    assert res["keywords_not_found_word_for_word"] == ["focus"]
+    assert (tmp_path / "o" / "fastlane" / "screenshots" / "en-US" / "APP_IPHONE_67_iphone-6.9_01_home.png").exists()
+    assert (tmp_path / "o" / "fastlane" / "metadata" / "android" / "en-US" / "images" / "featureGraphic.png").exists()
+    copy = json.loads((tmp_path / "o" / "shotforge.copy.json").read_text(encoding="utf-8"))
+    assert copy["tone"] == "calm" and copy["keywords"] == ["habit", "focus"]
+    res = json.loads(asyncio.run(S.render_screenshots(str(tmp_path / "o" / "shotforge.copy.json"), jobs=1, layout="fastlane",
+                                                     brand_file=str(tmp_path / "shotforge.toml")))[0])
+    assert res["output_files"] == 3
