@@ -1,7 +1,7 @@
 """Maestro akışlarıyla dil başına ekran görüntüsü alır ve mevcut girdi düzenine yazar: <out>/[<platform>/]<lang>/NN_ad.png
 
 shotforge cihazı açmaz, uygulamayı kurmaz ve cihaz dilini değiştirmez: açık cihazdaki kurulu uygulamayı akış sürer.
-Dil, akışa ${LANG} değişkeniyle geçer; uygulamayı o dilde açmak akışın işidir.
+Maestro dili akışta değil cihazda ayarlar: ya her dile bir cihaz kullanılır ya da uygulama ${LANG} değerini açılışta okur.
 """
 from __future__ import annotations
 

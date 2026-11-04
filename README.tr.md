@@ -239,29 +239,81 @@ shotforge create ./ekranlar --app Habita --variants 3 --variant-by both -o out
 
 ## Maestro ile çekim
 
-```bash
-shotforge capture --flows .maestro/shots --langs en,tr --platform ios -o shots
-shotforge create shots --app Habita --langs en,tr
-# veya ikisi birden:
-shotforge create shots --maestro .maestro/shots --capture-platform ios --app Habita --langs en,tr
-```
+shotforge uygulamanızın ekranlarını bilmez. **Hangi sayfaların çekileceğine Maestro akışınız karar verir:** her `takeScreenshot` bir sayfadır, akış dokunarak o sayfaya gider. shotforge bu akışı dil başına çalıştırır ve PNG'leri toplar. Cihaz açmaz, uygulama kurmaz, cihaz dilini değiştirmez.
 
-shotforge her dil için bir kez `maestro test -e LANG=<dil>` çalıştırır ve PNG'leri `shots/ios/<dil>/` altına taşır. Cihaz açmaz, uygulama kurmaz, cihaz dilini değiştirmez: akış, açık cihazda kurulu olan build'i sürer; uygulamayı `${LANG}` dilinde açmak akışın işidir. Uyarlamanız için bir başlangıç (açılış argümanlarının uygulamaya nasıl ulaştığı ve dilin nasıl seçildiği uygulamaya ve platforma bağlıdır):
+**1. Maestro'yu ve uygulamanızı kurun.** [Maestro](https://docs.maestro.dev)'yu kurun, ardından uygulamanızın bir build'ini simülatöre veya emülatöre yükleyin. `shotforge doctor`, Maestro'nun ve açık cihazın bulunup bulunmadığını gösterir.
+
+**2. Sayfaları seçin.** Uygulamayı en iyi anlatan 6–8 ekranı, göstermek istediğiniz sırayla belirleyin. Google Play cihaz türü başına en fazla 8, App Store en fazla 10 görsel alır.
+
+**3. Neye dokunulacağını bulun.** Maestro Studio'yu (cihazda bir öğeye sağ tıklayın) veya terminalde `maestro hierarchy` komutunu kullanın. Görünen metin yerine `id` tercih edin, çünkü metin dile göre değişir. Id'yi uygulamanıza eklemeniz gerekebilir (iOS'ta `accessibilityIdentifier` gibi).
+
+**4. Tek bir akış yazın.** Akışı ayrı bir klasöre koyun ki normal test çalıştırmalarınıza karışmasın:
 
 ```yaml
+# .maestro/shots/store.yaml
 appId: com.example.habita
 ---
 - launchApp:
     clearState: true
-    arguments:
-      AppleLanguages: "(${LANG})"
+    permissions:
+      all: allow
+- runFlow: login.yaml            # ekranlar hesap gerektiriyorsa; test hesabı kullanın
+- extendedWaitUntil:
+    visible:
+      id: "home_list"
+    timeout: 15000
 - takeScreenshot: 01_home
-- tapOn: {id: "stats"}
+
+- tapOn:
+    id: "tab_stats"
+- waitForAnimationToEnd
 - takeScreenshot: 02_stats
+
+- tapOn:
+    id: "tab_goals"
+- waitForAnimationToEnd
+- takeScreenshot: 03_goals
 ```
 
-Her dilde aynı görüntü adlarını kullanın, sırayı numarayla belirleyin. shotforge eksik adlarda, kırpılacak ekran oranlarında ve klasörde kalan eski PNG'lerde uyarır; eskileri silmez, silinmezlerse slayt olurlar. Ekranlar olduğu gibi yayımlanacağı için test verisi kullanın.
-`shotforge doctor`, Maestro'nun ve açık cihazın durumunu gösterir.
+- Adları numaralandırın: numara sayfa sırasını belirler. Her dilde aynı adları kullanın, çünkü shotforge ekranları dosya adına göre eşleştirir.
+- Sayfaları tek dosyada tutun. Maestro bir klasördeki akışları sabit bir sırayla çalıştırmaz ve alt klasörleri atlar.
+- `clearState` uygulamadan çıkış yaptırır; akış yeniden giriş yapmalı ya da `clearState`'i kaldırın.
+- Gerçekçi içerikli test verisi kullanın. Ekranlar olduğu gibi yayımlanır.
+- iPhone ile iPad'de veya iOS ile Android'de gezinme farklıysa ayrı akışlar yazın; `--platform ios`, `ipad`, `android` veya `android-tablet` ile çekin.
+
+**5. Her dilde çekin.** Maestro dili akışta değil cihazda ayarlar, bu yüzden şunlardan birini kullanın:
+
+*A. Her dile bir cihaz (uygulamanızı değiştirmeden çalışır).* Her cihazı başlatın, yeniyse uygulamayı yükleyin ve o dili çekin. Aynı anda tek cihaz açık tutun ya da `--device <id>` verin:
+
+```bash
+maestro start-device --platform ios --device-locale en_US
+shotforge capture --flows .maestro/shots/store.yaml --langs en --platform ios -o shots
+
+maestro start-device --platform ios --device-locale tr_TR
+shotforge capture --flows .maestro/shots/store.yaml --langs tr --platform ios -o shots
+```
+
+*B. Uygulamanız dili açılışta okur (tek cihaz, tek komut).* shotforge her dili akışa `${LANG}` olarak geçirir. Bunu açılış argümanı olarak gönderin; uygulamanızın debug build'i okuyup (iOS'ta `UserDefaults`, Android'de intent extras) dili değiştirsin:
+
+```yaml
+- launchApp:
+    arguments:
+      appLanguage: ${LANG}
+```
+
+```bash
+shotforge capture --flows .maestro/shots/store.yaml --langs en,tr --platform ios -o shots
+```
+
+**6. Görüntüleri kontrol edin.** `shots/ios/tr/` klasörünü açıp arayüzün gerçekten Türkçe olduğuna bakın: dil değişmese de görüntü üretilir ve hata çıkmaz. shotforge eksik adlarda (aynı çalıştırma içinde), kırpılacak ekran oranlarında ve klasörde kalan eski PNG'lerde uyarır; eskileri silmez, silinmezlerse slayt olurlar.
+
+**7. Görselleri üretin:**
+
+```bash
+shotforge create shots --app Habita --langs en,tr
+```
+
+B seçeneğinde 5. ve 7. adımları tek komutta yapabilirsiniz: `shotforge create shots --maestro .maestro/shots/store.yaml --capture-platform ios --app Habita --langs en,tr`.
 
 ## fastlane
 

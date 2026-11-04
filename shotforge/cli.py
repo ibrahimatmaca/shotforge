@@ -1165,7 +1165,7 @@ def main(argv=None):
     c.set_defaults(fn=cmd_create, langs=None, out=None, copy=None)
 
     cp = sub.add_parser("capture", help="take screenshots per language by running your Maestro flows on a booted device")
-    cp.add_argument("--flows", required=True, help="Maestro flow file or folder; flows use takeScreenshot and the ${LANG} variable")
+    cp.add_argument("--flows", required=True, help="Maestro flow file or folder; each takeScreenshot is one page, and ${LANG} holds the language")
     cp.add_argument("--langs", default="en,tr", help="comma-separated languages (default: en,tr)")
     cp.add_argument("--platform", default=None, choices=C.SHOT_PLATFORMS, help="write to <out>/<platform>/<lang>/ instead of <out>/<lang>/")
     cp.add_argument("--device", default=None, metavar="ID", help="device ID for Maestro")

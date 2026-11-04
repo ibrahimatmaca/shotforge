@@ -257,30 +257,81 @@ Design questions are not asked with `--variants`, so pass choices as flags. Uplo
 
 ## Maestro capture
 
-```bash
-shotforge capture --flows .maestro/shots --langs en,tr --platform ios -o shots
-shotforge create shots --app Habita --langs en,tr
-# or both at once:
-shotforge create shots --maestro .maestro/shots --capture-platform ios --app Habita --langs en,tr
-```
+shotforge doesn't know your app's screens. **Your Maestro flow decides which pages are captured:** every `takeScreenshot` is one page, and the flow taps its way there. shotforge runs that flow per language and collects the PNGs. It doesn't boot a device, install the app or change the device language.
 
-shotforge runs `maestro test -e LANG=<lang>` once per language and moves the PNGs to `shots/ios/<lang>/`. It doesn't boot a device, install the app or change the device language:
-the flow drives the build already on the booted device, and opening the app in `${LANG}` is up to the flow. A starting point to adapt (how launch arguments reach your app, and how it picks a language, depends on the app and platform):
+**1. Install Maestro and your app.** Install [Maestro](https://docs.maestro.dev), then install a build of your app on a simulator or emulator. `shotforge doctor` shows whether Maestro and a booted device are found.
+
+**2. Choose the pages.** Pick the 6–8 screens that sell the app, in the order you want to show them. Google Play takes at most 8 images per device type, and the App Store at most 10.
+
+**3. Find what to tap.** Use Maestro Studio (right-click an element on the device) or `maestro hierarchy` in a terminal. Prefer `id` over visible text, because text changes with the language. An id may need adding to your app, such as `accessibilityIdentifier` on iOS.
+
+**4. Write one flow** in its own folder, so your normal test runs don't pick it up:
 
 ```yaml
+# .maestro/shots/store.yaml
 appId: com.example.habita
 ---
 - launchApp:
     clearState: true
-    arguments:
-      AppleLanguages: "(${LANG})"
+    permissions:
+      all: allow
+- runFlow: login.yaml            # if the screens need an account; use a test account
+- extendedWaitUntil:
+    visible:
+      id: "home_list"
+    timeout: 15000
 - takeScreenshot: 01_home
-- tapOn: {id: "stats"}
+
+- tapOn:
+    id: "tab_stats"
+- waitForAnimationToEnd
 - takeScreenshot: 02_stats
+
+- tapOn:
+    id: "tab_goals"
+- waitForAnimationToEnd
+- takeScreenshot: 03_goals
 ```
 
-Use the same screenshot names in every language; number them for the order you want. shotforge warns about missing names, about shapes that would be cropped, and about older PNGs in the folder, which it leaves in place and which would become slides. Use test data, because the screens are published as they are.
-`shotforge doctor` shows whether Maestro and a booted device are available.
+- Number the names: the number sets the page order. Use the same names in every language, because shotforge matches screens by file name.
+- Keep the pages in one file. Maestro runs the flows in a folder in no fixed order and ignores subfolders.
+- `clearState` signs the app out, so the flow has to log in again, or remove `clearState`.
+- Use test data with realistic content. The screens are published as they are.
+- For iPhone and iPad, or for iOS and Android, write separate flows if the navigation differs, and capture with `--platform ios`, `ipad`, `android` or `android-tablet`.
+
+**5. Capture in each language.** Maestro sets the language on the device, not in the flow, so use one of these:
+
+*A. One device per language (works without changing your app).* Start each device, install the app on it if it's new, and capture that language. Keep one device running at a time, or pass `--device <id>`:
+
+```bash
+maestro start-device --platform ios --device-locale en_US
+shotforge capture --flows .maestro/shots/store.yaml --langs en --platform ios -o shots
+
+maestro start-device --platform ios --device-locale tr_TR
+shotforge capture --flows .maestro/shots/store.yaml --langs tr --platform ios -o shots
+```
+
+*B. Your app reads the language at launch (one device, one command).* shotforge passes each language to the flow as `${LANG}`. Send it as a launch argument, and have a debug build of your app read it (`UserDefaults` on iOS, intent extras on Android) and switch language:
+
+```yaml
+- launchApp:
+    arguments:
+      appLanguage: ${LANG}
+```
+
+```bash
+shotforge capture --flows .maestro/shots/store.yaml --langs en,tr --platform ios -o shots
+```
+
+**6. Check the screenshots.** Open `shots/ios/tr/` and confirm the UI really is in Turkish: a language that didn't switch still produces images, with no error. shotforge warns about missing names (within one run), about shapes that would be cropped, and about older PNGs in the folder, which it leaves in place and which would become slides.
+
+**7. Create the images:**
+
+```bash
+shotforge create shots --app Habita --langs en,tr
+```
+
+With option B you can do steps 5 and 7 in one command: `shotforge create shots --maestro .maestro/shots/store.yaml --capture-platform ios --app Habita --langs en,tr`.
 
 ## fastlane
 
