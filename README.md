@@ -90,8 +90,11 @@ Without `-o`, output goes to `./shotforge-out/<app>/`. Add `--sheet` for a singl
 
 ## What it asks, and the defaults
 
+Run `shotforge` on its own in a terminal and it starts by asking where your screenshots are, then goes through the questions below, including who writes the headlines (AI, you, or a file).
+
 | Question | Flag | If left blank |
 |---|---|---|
+| Screenshots | `shotforge create <folder or files>` | required, asked again until given |
 | Store | `--store appstore\|playstore\|both` | both |
 | Header and Search Results images (App Store) | `--header-sizes 5244x2950,3840x2560,1920x1280\|no` | all three |
 | Languages | `--langs en,tr,de` | en, tr |

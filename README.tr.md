@@ -88,8 +88,11 @@ out/
 
 ## Sorulan sorular ve varsayılanlar
 
+Terminalde yalnızca `shotforge` yazarsan önce ekran görüntülerinin nerede olduğunu sorar, sonra başlıkları kimin yazacağı (AI, sen ya da bir dosya) dahil aşağıdaki soruları sorar.
+
 | Soru | Seçenek | Boş bırakılırsa |
 |---|---|---|
+| Ekran görüntüleri | `shotforge create <klasör veya dosyalar>` | zorunlu, verilene kadar tekrar sorulur |
 | Mağaza | `--store appstore\|playstore\|both` | ikisi |
 | Header and Search Results görselleri (App Store) | `--header-sizes 5244x2950,3840x2560,1920x1280\|no` | üçü de |
 | Diller | `--langs en,tr,de` | en, tr |

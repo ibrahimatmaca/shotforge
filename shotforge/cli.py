@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -252,6 +253,34 @@ def _ask_valid(q: dict, parse):
             print(f"  Invalid: {e}")
     print("  The default will be used.")
     return ""
+
+
+def _shot_paths(v: str) -> list[str]:
+    """Yazılan yolu çözer: boşluklu düz yol, sürükle-bırak kaçışları ('a\\ b') ve birden çok dosya."""
+    if Path(v).expanduser().exists():
+        return [str(Path(v).expanduser())]
+    try:
+        return [str(Path(i).expanduser()) for i in shlex.split(v)]
+    except ValueError:
+        return [v]
+
+
+def ask_screenshots() -> list[str]:
+    """Ekran görüntüsü verilmediyse sorar. Bunlar olmadan üretim olmaz, bu yüzden varsayılanı yoktur."""
+    q = next(q for q in I.QUESTIONS if q["id"] == "screenshots")
+    print(f"  ({q['note']})")
+    for _ in range(3):
+        v = _ask(f"{q['question']} ")
+        if not v:
+            print("  Screenshots are required.")
+            continue
+        paths = _shot_paths(v)
+        try:
+            scan_shots(paths)
+            return paths
+        except (SystemExit, OSError) as e:
+            print(f"  {e}")
+    raise SystemExit("No screenshots given. Usage: shotforge create <folder or files>")
 
 
 def ask_store_questions(a, answers: dict) -> dict:
@@ -852,6 +881,10 @@ def write_brief(dest: Path, data: dict, tpl: dict, langs: list[str], device: str
 
 def cmd_create(a):
     r = None
+    if not a.shots and not a.maestro:  # --maestro klasörü kendisi doldurur, aşağıda kontrol edilir
+        if not should_ask(a):
+            raise SystemExit("Screenshots required: shotforge create <folder or files>")
+        a.shots = ask_screenshots()
     if a.device:  # tek cihaz, eski düzen
         a.langs = a.langs or "en,tr"
     else:
@@ -1142,7 +1175,7 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     c = sub.add_parser("create", help="design decision + copy (AI) + separate images per page and language, in one command")
-    c.add_argument("shots", nargs="+", help="screenshot files or a folder")
+    c.add_argument("shots", nargs="*", help="screenshot files or a folder (asked for in a terminal if left out)")
     add_design_args(c)
     add_render_args(c)
     add_brand_args(c)
@@ -1228,7 +1261,8 @@ def main(argv=None):
     pv.add_argument("--extend", action="store_true")
     pv.set_defaults(fn=cmd_preview)
 
-    a = ap.parse_args(argv)
+    argv = sys.argv[1:] if argv is None else argv
+    a = ap.parse_args(argv or (["create"] if sys.stdin.isatty() else []))
     try:
         if hasattr(a, "brand"):
             apply_brand(a)

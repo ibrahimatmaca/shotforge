@@ -35,6 +35,8 @@ _STORE_ALIASES = {
 }
 
 QUESTIONS = [
+    dict(id="screenshots", question="Where are your app screenshots? (a folder or image files)", kind="path", required=True,
+         note="You can drag the folder into the terminal. Separate sets go in <folder>/tr/, <folder>/android/ and so on."),
     dict(id="app", question="What is the app called?", kind="text", required=True),
     dict(id="about", question="What does the app do? (1–2 sentences)", kind="text", default="inferred from the screens"),
     dict(id="store", question="Which store should the images be for?", kind="choice",
