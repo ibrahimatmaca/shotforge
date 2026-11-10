@@ -25,17 +25,17 @@ def full(shots_dir, tmp_path_factory):
 
 def test_tree_per_language(full):
     for lang in ("en", "tr"):
-        assert sorted(p.name for p in (full / lang / "app-store" / "iphone-6.9").iterdir()) == ["01_home.png", "02_stats.png"]
-        assert sorted(p.name for p in (full / lang / "google-play" / "phone").iterdir()) == ["01_home.png", "02_stats.png"]
-        assert sorted(p.name for p in (full / lang / "app-store" / "header-search").iterdir()) == ["1920x1280.png", "5244x2950.png"]
-        assert (full / lang / "google-play" / "feature-graphic" / "1024x500.png").exists()
+        assert sorted(p.name for p in (full / lang / "app-store" / "iphone-6.9").iterdir()) == [f"01_{lang}.png", f"02_{lang}.png"]
+        assert sorted(p.name for p in (full / lang / "google-play" / "phone").iterdir()) == [f"01_{lang}.png", f"02_{lang}.png"]
+        assert sorted(p.name for p in (full / lang / "app-store" / "header-search").iterdir()) == [f"1920x1280_{lang}.png", f"5244x2950_{lang}.png"]
+        assert (full / lang / "google-play" / "feature-graphic" / f"1024x500_{lang}.png").exists()
 
 
 def test_every_file_has_exact_size_and_no_alpha(full):
     want = {"iphone-6.9": (1320, 2868), "phone": (1080, 1920), "header-search": None, "feature-graphic": (1024, 500)}
     for p in full.glob("*/*/*/*.png"):
         with Image.open(p) as im:
-            size = want[p.parent.name] or tuple(map(int, p.stem.split("x")))
+            size = want[p.parent.name] or tuple(map(int, p.stem.split("_")[0].split("x")))
             assert im.size == size and im.mode == "RGB", p
 
 
@@ -62,7 +62,7 @@ def test_render_keeps_store_targets_and_stale_files_stay_out_of_zip(full, tmp_pa
     copy.write_text(json.dumps(d), encoding="utf-8")
     run("render", "--copy", copy, "--langs", "en", "--jobs", 1, "-o", work)
     names = zipfile.ZipFile(work / "kislik-demo.zip").namelist()
-    assert "en/google-play/phone/01_home.png" in names and not any("99_old" in n for n in names)
+    assert "en/google-play/phone/01_en.png" in names and not any("99_old" in n for n in names)
 
 
 def test_only_skips_zip_and_banners(full, tmp_path):
@@ -95,7 +95,7 @@ def test_zip_only_leaves_no_language_folders(shots_dir, tmp_path):
     run("create", shots_dir, "--app", "Demo", "--ai", "offline", "--no-ask", "--count", 1, "--langs", "en", "--store", "playstore",
         "--zip-only", "--jobs", 1, "-o", out)
     assert not (out / "en").exists() and (out / "shotforge.copy.json").exists()
-    assert "en/google-play/phone/01_home.png" in zipfile.ZipFile(out / "demo.zip").namelist()
+    assert "en/google-play/phone/01_en.png" in zipfile.ZipFile(out / "demo.zip").namelist()
 
 
 def test_zip_never_touches_files_next_to_the_output_folder(shots_dir, tmp_path):
@@ -146,7 +146,7 @@ def test_language_and_platform_folders_are_used(tmp_path):
     out = tmp_path / "o"
     run("create", root, "--app", "D", "--ai", "offline", "--no-ask", "--count", 1, "--langs", "en,tr", "--store", "appstore",
         "--header-sizes", "no", "--jobs", 1, "-o", out, "--template", "classic")
-    pixel = lambda lang: Image.open(out / lang / "app-store" / "iphone-6.9" / "01_a.png").getpixel((660, 2000))  # noqa: E731
+    pixel = lambda lang: Image.open(out / lang / "app-store" / "iphone-6.9" / f"01_{lang}.png").getpixel((660, 2000))  # noqa: E731
     assert pixel("en")[0] > pixel("en")[1] and pixel("tr")[1] > pixel("tr")[0]
 
 

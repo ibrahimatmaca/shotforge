@@ -46,7 +46,7 @@ Reply in the user's language. All arguments are optional: this conversation is w
    `shotforge create <folder> --app "<name>" --about "<description>" --no-ask --sheet`
    plus any of `--store appstore|playstore|both --header-sizes 5244x2950,3840x2560,1920x1280|no --langs en,tr --devices … --preview [lang=]file --icon file --no-zip --zip-only -o <dir> --bg-color #… --text-color #… --accent #… --count N --dimension 2d|3d --template <name> --texts texts.txt --keywords a,b --layout fastlane --variants 2|3 --variant-by copy|design|both --brand file --maestro <flows>`.
    `--maestro <flows>` first runs the user's Maestro flows per language on an already booted device, writing into `<folder>`. Use it only if the user asks for it.
-   The deliverables are SEPARATE image files: `<out>/<lang>/app-store/iphone-6.9/01_….png`, `<out>/<lang>/app-store/header-search/…`, `<out>/<lang>/google-play/phone/…`, `<out>/<lang>/google-play/feature-graphic/…`, plus `<out>/manifest.json` and `<out>/<app>.zip`.
+   The deliverables are SEPARATE image files: `<out>/<lang>/app-store/iphone-6.9/01_<lang>.png`, `<out>/<lang>/app-store/header-search/…`, `<out>/<lang>/google-play/phone/…`, `<out>/<lang>/google-play/feature-graphic/…`, plus `<out>/manifest.json` and `<out>/<app>.zip`.
    With `--layout fastlane`: `<out>/fastlane/screenshots/<locale>/…` and `<out>/fastlane/metadata/android/<locale>/images/…`; App Store header images go to `<out>/app-store-extra/`. With `--variants`, each set is under `<out>/variant-a/`, `<out>/variant-b/`, ….
    `--sheet` is only a review aid.
 5. Summarise the printed "design decision" (template, 2D/3D reason, colours and their source, page count) and repeat every warning. Open `<out>/_review/overview_*.jpg` with Read and check

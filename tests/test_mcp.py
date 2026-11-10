@@ -67,7 +67,7 @@ def test_create_with_blank_intake_uses_store_defaults(shots_dir, tmp_path):
         banner={"title": {"en": "Hello *there*", "tr": "Merhaba"}}))
     data = json.loads(res[0])
     assert set(data["files"]) == {"en", "tr"} and Path(data["zip"]).name == "demo.zip"
-    assert any("google-play/feature-graphic/1024x500.png" in f for f in data["files"]["en"])
+    assert any("google-play/feature-graphic/1024x500_en.png" in f for f in data["files"]["en"])
     assert any("Google Play" in w for w in data["render_warnings"])
 
 
@@ -89,7 +89,7 @@ def test_create_fastlane_with_brand_and_keywords(shots_dir, tmp_path):
         store="both", header_sizes=["no"], keywords=["habit", "focus"], brand_file=str(tmp_path / "shotforge.toml")))[0])
     assert res["design"]["template"] == "bubble" and res["design"]["colors"]["background"] == "#123456"
     assert res["keywords_not_found_word_for_word"] == ["focus"]
-    assert (tmp_path / "o" / "fastlane" / "screenshots" / "en-US" / "APP_IPHONE_67_iphone-6.9_01_home.png").exists()
+    assert (tmp_path / "o" / "fastlane" / "screenshots" / "en-US" / "APP_IPHONE_67_iphone-6.9_01_en.png").exists()
     assert (tmp_path / "o" / "fastlane" / "metadata" / "android" / "en-US" / "images" / "featureGraphic.png").exists()
     copy = json.loads((tmp_path / "o" / "shotforge.copy.json").read_text(encoding="utf-8"))
     assert copy["tone"] == "calm" and copy["keywords"] == ["habit", "focus"]

@@ -22,7 +22,7 @@ def test_design_variants_share_text_and_colours(shots_dir, tmp_path, capsys):
     assert a["slides"][0]["title"] == b["slides"][0]["title"] == c["slides"][0]["title"]
     assert a["design"]["colors"]["background"] == b["design"]["colors"]["background"]
     for l in "abc":
-        assert (out / f"variant-{l}" / "en" / "app-store" / "iphone-6.9" / "01_home.png").exists()
+        assert (out / f"variant-{l}" / "en" / "app-store" / "iphone-6.9" / "01_en.png").exists()
         assert (out / f"variant-{l}" / "demo.zip").exists()
     assert "same headlines" not in capsys.readouterr().err
 
@@ -47,7 +47,7 @@ def test_each_variant_gets_its_own_fastlane_tree(shots_dir, tmp_path):
     out = tmp_path / "o"
     main(["create", str(shots_dir), *BASE, "--variants", "2", "--layout", "fastlane", "-o", str(out)])
     for l in "ab":
-        assert (out / f"variant-{l}" / "fastlane" / "screenshots" / "en-US" / "APP_IPHONE_67_iphone-6.9_01_home.png").exists()
+        assert (out / f"variant-{l}" / "fastlane" / "screenshots" / "en-US" / "APP_IPHONE_67_iphone-6.9_01_en.png").exists()
 
 
 def test_copy_flag_gets_a_suffix_per_variant(shots_dir, tmp_path):

@@ -102,7 +102,7 @@ def test_interactive_skips_header_question_for_play(monkeypatch, shots_dir, tmp_
     cli.main(["create", str(shots_dir), "--app", "Demo", "--ai", "offline", "--ask", "--count", "1", "--jobs", "1",
               "--langs", "en", "-o", str(tmp_path / "o")])
     assert any("Which store" in p for p in prompts) and not any("Header" in p and "Create" in p for p in prompts)
-    assert (tmp_path / "o" / "en" / "google-play" / "phone" / "01_home.png").exists()
+    assert (tmp_path / "o" / "en" / "google-play" / "phone" / "01_en.png").exists()
     assert not (tmp_path / "o" / "en" / "app-store").exists()
 
 
@@ -124,7 +124,7 @@ def test_create_asks_for_screenshots_and_retries(monkeypatch, shots_dir, tmp_pat
     cli.main(["create", "--app", "Demo", "--ai", "offline", "--ask", "--count", "1", "--jobs", "1", "--langs", "en",
               "--store", "playstore", "-o", str(tmp_path / "o")])
     assert sum("screenshots" in p for p in prompts) == 3
-    assert (tmp_path / "o" / "en" / "google-play" / "phone" / "01_home.png").exists()
+    assert (tmp_path / "o" / "en" / "google-play" / "phone" / "01_en.png").exists()
 
 
 def test_screenshot_paths_accept_dragged_and_several():

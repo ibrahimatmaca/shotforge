@@ -112,6 +112,6 @@ def test_create_with_maestro_uses_localized_screens(maestro):
     shots, out = maestro / "shots", maestro / "o"
     main(["create", str(shots), "--maestro", str(maestro / "flows"), "--app", "Demo", "--ai", "offline", "--no-ask", "--no-brand",
           "--count", "1", "--jobs", "1", "--store", "appstore", "--header-sizes", "no", "--langs", "en,tr", "-o", str(out)])
-    assert (out / "tr" / "app-store" / "iphone-6.9" / "01_home.png").exists()
+    assert (out / "tr" / "app-store" / "iphone-6.9" / "01_tr.png").exists()
     with Image.open(shots / "tr" / "01_home.png") as im:
         assert im.size == (1320, 2868)

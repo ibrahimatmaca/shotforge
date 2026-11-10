@@ -102,7 +102,7 @@ def _red_box(path):
 def test_logo_is_drawn_in_the_free_band_on_slides_only_via_flag_or_brand(project, shots_dir, position):
     main(["create", str(shots_dir), "--app", "Demo", "--ai", "offline", "--no-ask", "--count", "1", "--device", "iphone-6.9",
           "--text-position", position, "--align", "center", "--jobs", "1", "--no-grain", "-o", "out", "--copy", "c.json"])
-    (h, w, _), ys, xs = _red_box("out/de/01_home.png")
+    (h, w, _), ys, xs = _red_box("out/de/01_de.png")
     assert len(ys), "logo not found"
     band = h * 0.06
     assert (ys.max() < band) if position == "top" else (ys.min() > h - band)
@@ -116,4 +116,4 @@ def test_copy_file_cannot_set_a_logo(project, shots_dir, tmp_path, capsys):
     json.dump(d, open("c.json", "w", encoding="utf-8"))
     main(["render", "--copy", "c.json", "-o", "out2", "--jobs", "1", "--no-brand", "--langs", "en", "--no-grain"])
     assert "'logo' field in the copy file was ignored" in capsys.readouterr().err
-    assert not len(_red_box("out2/en/01_home.png")[1])
+    assert not len(_red_box("out2/en/01_en.png")[1])

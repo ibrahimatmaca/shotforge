@@ -83,11 +83,11 @@ Sonuç, her dil için ayrı dosyalar:
 out/
   en/
     app-store/
-      iphone-6.9/01_home.png …
+      iphone-6.9/01_en.png …
       header-search/5244x2950.png, 3840x2560.png, 1920x1280.png
       previews/iphone-6.9.mp4          # yalnızca --preview verilirse
     google-play/
-      phone/01_home.png …
+      phone/01_en.png …
       feature-graphic/1024x500.png
   tr/ …
   manifest.json                        # tüm dosyalar, boyutlar, kararlar ve uyarılar
@@ -339,8 +339,8 @@ fastlane supply --metadata_path store/fastlane/metadata/android --skip_upload_ap
 ```
 
 ```
-store/fastlane/screenshots/en-US/APP_IPHONE_67_iphone-6.9_01_home.png        # deliver cihazı görsel boyutundan anlar
-store/fastlane/metadata/android/en-US/images/phoneScreenshots/01_home.png    # ayrıca sevenInchScreenshots, tenInchScreenshots
+store/fastlane/screenshots/en-US/APP_IPHONE_67_iphone-6.9_01_en.png        # deliver cihazı görsel boyutundan anlar
+store/fastlane/metadata/android/en-US/images/phoneScreenshots/01_en.png    # ayrıca sevenInchScreenshots, tenInchScreenshots
 store/fastlane/metadata/android/en-US/images/featureGraphic.png
 store/app-store-extra/en/header-search/5244x2950.png                         # deliver bunları yüklemez
 store/en/app-store/previews/iphone-6.9.mp4                                   # varsa App Preview: bunları kendiniz yüklersiniz
@@ -352,7 +352,7 @@ Dil kodları mağaza yerel ayarına çevrilir (`en → en-US`; `tr`, Apple'da `t
 
 ```bash
 shotforge create ./ekranlar --app Habita --store appstore --header-sizes no --layout asc -o media
-# media/en-US/APP_IPHONE_67/01_home.png, media/tr/APP_IPHONE_67/…   (klasör tabanlı yükleyicilerle:  asc apps media upload … --folder media/)
+# media/en-US/APP_IPHONE_67/01_en.png, media/tr/APP_IPHONE_67/…   (klasör tabanlı yükleyicilerle:  asc apps media upload … --folder media/)
 shotforge preview kayit.mov -o preview.mp4      # 886x1920, 30 fps, H.264/AAC, ≤ 30 sn (ffmpeg gerekir)
 ```
 
