@@ -348,7 +348,7 @@ async def create_screenshots(
     template/dimension: 'auto' lets shotforge's rules choose (2D = flat/in-plane phone, 3D = perspective phone). Use
         list_templates for names. background_color/text_color/accent_color: '#RRGGBB' (optional; text colour is auto-fixed if unreadable).
     count: number of pages 1-10 (defaults to len(slides), else 6-7).
-    layout: 'store' (default), 'flat' (out/<lang>/NN_name.png, one device), 'asc' (out/<locale>/<DISPLAY_TYPE>/NN_name.png) or
+    layout: 'store' (default), 'flat' (out/<lang>/NN_<lang>.png, one device), 'asc' (out/<locale>/<DISPLAY_TYPE>/NN_<lang>.png) or
         'fastlane' (out/fastlane/screenshots/<locale>/… and out/fastlane/metadata/android/<locale>/images/…).
     keywords: the search keywords your slide copy targets; the result lists any not found word for word.
     brand_file: path to a shotforge.toml; it fills template, colours, tone and langs you left out, and adds its font and logo.

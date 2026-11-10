@@ -17,19 +17,19 @@ def test_deliver_and_supply_tree(shots_dir, tmp_path):
     ios = out / "fastlane" / "screenshots"
     assert sorted(p.name for p in ios.iterdir()) == ["en-US", "tr"]
     names = sorted(p.name for p in (ios / "en-US").iterdir())
-    assert names == ["APP_IPHONE_65_iphone-6.5_01_home.png", "APP_IPHONE_65_iphone-6.5_02_stats.png",
-                     "APP_IPHONE_67_iphone-6.9_01_home.png", "APP_IPHONE_67_iphone-6.9_02_stats.png"]
+    assert names == ["APP_IPHONE_65_iphone-6.5_01_en.png", "APP_IPHONE_65_iphone-6.5_02_en.png",
+                     "APP_IPHONE_67_iphone-6.9_01_en.png", "APP_IPHONE_67_iphone-6.9_02_en.png"]
     with Image.open(ios / "en-US" / names[2]) as im:
         assert im.size == (1320, 2868)
     play = out / "fastlane" / "metadata" / "android"
     assert sorted(p.name for p in play.iterdir()) == ["en-US", "tr-TR"]
     images = play / "tr-TR" / "images"
     assert sorted(p.name for p in images.iterdir()) == ["featureGraphic.png", "phoneScreenshots", "sevenInchScreenshots"]
-    assert sorted(p.name for p in (images / "phoneScreenshots").iterdir()) == ["01_home.png", "02_stats.png"]
+    assert sorted(p.name for p in (images / "phoneScreenshots").iterdir()) == ["01_tr.png", "02_tr.png"]
     with Image.open(images / "featureGraphic.png") as im:
         assert im.size == (1024, 500)
     # başlık görselleri deliver klasörüne girmez
-    assert (out / "app-store-extra" / "en" / "header-search" / "1920x1280.png").exists()
+    assert (out / "app-store-extra" / "en" / "header-search" / "1920x1280_en.png").exists()
     assert not list(ios.rglob("1920x1280*"))
 
 
@@ -41,7 +41,7 @@ def test_manifest_and_zip_cover_the_tree(shots_dir, tmp_path):
     assert all((out / p).exists() for p in by_path)
     fg = by_path["fastlane/metadata/android/en-US/images/featureGraphic.png"]
     assert fg["store"] == "google-play" and fg["target"] == "feature-graphic" and "feature graphic" in fg["works_with"]
-    shot = by_path["fastlane/screenshots/tr/APP_IPHONE_67_iphone-6.9_01_home.png"]
+    shot = by_path["fastlane/screenshots/tr/APP_IPHONE_67_iphone-6.9_01_tr.png"]
     assert shot["store"] == "app-store" and shot["target"] == "iphone-6.9" and shot["lang"] == "tr"
     assert set(zipfile.ZipFile(out / "demo.zip").namelist()) == set(by_path) | {"manifest.json"}
 

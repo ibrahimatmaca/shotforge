@@ -642,8 +642,7 @@ def cmd_render(a, data: dict | None = None):
                     continue
                 cfg = slide_cfg(ns, tpl, pal, idx, s, paths, names, warnings)
                 warnings += [(idx + 1, f"[{lang}] {m}") for m in text_problems(cfg, lang)]
-                slug = Path(s["shot"]).stem.lstrip("0123456789_- ") or "screen"
-                fname = f"{idx + 1:02d}_{slug}.{'jpg' if a.format == 'jpg' else 'png'}"
+                fname = f"{idx + 1:02d}_{lang}.{'jpg' if a.format == 'jpg' else 'png'}"  # NN_<lang>, whatever the source file is called
                 store, target = store_dir(dev).parts
                 if layout == "store":
                     path = out / lang / store / target / fname
@@ -665,7 +664,7 @@ def cmd_render(a, data: dict | None = None):
                 cfg[k] = str(paths[slides[i % len(slides)]["shot"]])
             title, subtitle = banner_text(data, slides[0])
             cfg.update(banner=key, dimension=tpl.get("dimension"), title=title, subtitle=subtitle, icon=icon)
-            path = out / lang / b["store"] / b["folder"] / f"{key}.png"
+            path = out / lang / b["store"] / b["folder"] / f"{key}_{lang}.png"
             if layout == "fastlane":
                 path = fastlane_banner(out, b, lang, key)
             jobs.append(dict(cfg=cfg, locale=lang, idx=0, total=1, path=str(path), fmt="png",
@@ -734,7 +733,7 @@ def fastlane_banner(out: Path, banner: dict, lang: str, key: str) -> Path:
     if banner["store"] == "google-play":
         return out / "fastlane" / "metadata" / "android" / PLAY_LOCALES.get(lang, lang) / "images" / "featureGraphic.png"
     # deliver ekran görüntüsü yüklüyor; başlık görselleri onun klasörüne girerse boyutu reddedilir
-    return out / "app-store-extra" / lang / banner["folder"] / f"{key}.png"
+    return out / "app-store-extra" / lang / banner["folder"] / f"{key}_{lang}.png"
 
 
 def banner_text(data: dict, first_slide: dict) -> tuple:
@@ -1171,7 +1170,7 @@ def add_render_args(p):
     p.add_argument("--device", default=None, choices=DEVICES,
                    help="one device (old layout); otherwise the store targets are used, or iphone-6.9 without them")
     p.add_argument("--layout", default=None, choices=["flat", "asc", "store", "fastlane"],
-                   help="store: out/<lang>/<store>/<target>/… | flat: out/<lang>/NN_name.png | asc: out/<lang>/<DISPLAY_TYPE>/NN_name.png | "
+                   help="store: out/<lang>/<store>/<target>/… | flat: out/<lang>/NN_<lang>.png | asc: out/<lang>/<DISPLAY_TYPE>/NN_<lang>.png | "
                         "fastlane: out/fastlane/screenshots/<locale>/… and out/fastlane/metadata/android/<locale>/images/…")
     p.add_argument("--icon", default=None, metavar="FILE", help="app icon for the header and feature graphic")
     p.add_argument("--format", default="png", choices=["png", "jpg"])

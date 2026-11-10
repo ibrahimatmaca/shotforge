@@ -85,11 +85,11 @@ Result, as separate files per language:
 out/
   en/
     app-store/
-      iphone-6.9/01_home.png …
+      iphone-6.9/01_en.png …
       header-search/5244x2950.png, 3840x2560.png, 1920x1280.png
       previews/iphone-6.9.mp4          # only if you pass --preview
     google-play/
-      phone/01_home.png …
+      phone/01_en.png …
       feature-graphic/1024x500.png
   tr/ …
   manifest.json                        # every file, its size, the decisions and warnings
@@ -357,8 +357,8 @@ fastlane supply --metadata_path store/fastlane/metadata/android --skip_upload_ap
 ```
 
 ```
-store/fastlane/screenshots/en-US/APP_IPHONE_67_iphone-6.9_01_home.png        # deliver finds the device from the image size
-store/fastlane/metadata/android/en-US/images/phoneScreenshots/01_home.png    # also sevenInchScreenshots, tenInchScreenshots
+store/fastlane/screenshots/en-US/APP_IPHONE_67_iphone-6.9_01_en.png        # deliver finds the device from the image size
+store/fastlane/metadata/android/en-US/images/phoneScreenshots/01_en.png    # also sevenInchScreenshots, tenInchScreenshots
 store/fastlane/metadata/android/en-US/images/featureGraphic.png
 store/app-store-extra/en/header-search/5244x2950.png                         # deliver doesn't upload these
 store/en/app-store/previews/iphone-6.9.mp4                                   # App Previews, if any: upload these yourself
@@ -370,7 +370,7 @@ Language codes become store locales (`en → en-US`, `tr → tr` on Apple and `t
 
 ```bash
 shotforge create ./screens --app Habita --store appstore --header-sizes no --layout asc -o media
-# media/en-US/APP_IPHONE_67/01_home.png, media/tr/APP_IPHONE_67/…  — works with folder-based uploaders such as
+# media/en-US/APP_IPHONE_67/01_en.png, media/tr/APP_IPHONE_67/…  — works with folder-based uploaders such as
 #   asc apps media upload com.example.MyApp --folder media/ --replace      (keremerkan/asc-cli)
 shotforge preview recording.mov -o preview.mp4      # 886x1920, 30 fps, H.264/AAC, ≤ 30 s (needs ffmpeg)
 ```
