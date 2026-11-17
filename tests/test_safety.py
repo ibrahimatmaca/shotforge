@@ -60,7 +60,8 @@ def test_bad_langs_rejected_before_any_render(shots_dir, tmp_path, lang):
 def test_text_problems():
     cfg = dict(device="iphone-6.9")
     assert engine.text_problems(dict(cfg, title={"tr": "Gününü *planla* şimdi"}), "tr") == []
-    assert any("日" in m for m in engine.text_problems(dict(cfg, title={"ja": "日本語"}), "ja"))
+    # a character no font has still gets reported (CJK itself now falls back to a system font)
+    assert any("\U000F0001" in m for m in engine.text_problems(dict(cfg, title={"ja": "日本\U000F0001"}), "ja"))
     assert any("overflows" in m for m in engine.text_problems(dict(cfg, title={"tr": "Uluslararasılaştırılabilirlikçilerimizden"}), "tr"))
 
 
