@@ -12,6 +12,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
+from . import scripts
+
 HERE = Path(__file__).resolve().parent
 SS = 2  # süper-örnekleme çarpanı (kenar yumuşatma)
 
@@ -217,25 +219,29 @@ def parse_markup(text: str):
     return paras
 
 
-def wrap(paras, font, max_w):
-    """Satırlar: [([(kelime, vurgu, genişlik, bitişik), ...], genişlik), ...]. Bitişik parçalar satır sonunda ayrılmaz."""
+def wrap(paras, font, max_w, rtl=False):
+    """Satırlar: [([(kelime, vurgu, genişlik, bitişik), ...], genişlik), ...]. Bitişik parçalar satır sonunda ayrılmaz.
+    CJK metinde satır karakterler arasında kırılır; bitişik=True olan parça öncesinde boşluk bırakılmaz."""
     space = font.getlength(" ")
     lines = []
     for words in paras:
-        units: list[list] = []
+        units: list[list] = []  # [parçalar, öncesinde boşluk yok mu]
         for w, acc, glued in words:
-            if glued and units:
-                units[-1].append((w, acc, font.getlength(w), True))
-            else:
-                units.append([(w, acc, font.getlength(w), False)])
+            for k, piece in enumerate(scripts.split_breaks(w)):
+                width = font.getlength(scripts.shape(piece, rtl))
+                if k == 0 and glued and units:
+                    units[-1][0].append((piece, acc, width, True))
+                else:
+                    units.append([[(piece, acc, width, k > 0)], k > 0])
         cur, cur_w = [], 0.0
-        for unit in units:
-            uw = sum(part[2] for part in unit)
-            if cur and cur_w + space + uw > max_w:
+        for parts, tight in units:
+            uw = sum(part[2] for part in parts)
+            sp = 0 if tight or not cur else space
+            if cur and cur_w + sp + uw > max_w:
                 lines.append((cur, cur_w))
-                cur, cur_w = [], 0.0
-            cur_w += uw + (space if cur else 0)
-            cur += unit
+                cur, cur_w, sp = [], 0.0, 0
+            cur_w += uw + sp
+            cur += parts
         if cur:
             lines.append((cur, cur_w))
     return lines, space
@@ -250,7 +256,8 @@ class TextBlock:
         max_w = W - 2 * self.margin
         self.parts = []
         if title:
-            self.parts.append(self._fit(title, fp_title, int(W * 0.098 * title_scale), int(W * 0.050), max_w, 3, 1.10, color, 0))
+            self.parts.append(self._fit(title, fp_title, int(W * 0.098 * title_scale), int(W * 0.050), max_w, 3, 1.10, color, 0,
+                                        bold=True))
         if subtitle:
             sub_col = (*color[:3], 205)
             self.parts.append(self._fit(subtitle, fp_sub, int(W * 0.043), int(W * 0.028), max_w, 2, 1.32,
@@ -259,18 +266,20 @@ class TextBlock:
         self.title_h = (self.parts[0]["gap"] + len(self.parts[0]["lines"]) * self.parts[0]["line_h"]) if title else 0
         self.title_w = max((w for _, w in self.parts[0]["lines"]), default=0) if title else 0
 
-    def _fit(self, text, path, start, minimum, max_w, max_lines, lh, color, gap, accent_ok=True):
+    def _fit(self, text, path, start, minimum, max_w, max_lines, lh, color, gap, accent_ok=True, bold=False):
         paras = parse_markup(text)
+        rtl = scripts.is_rtl(text)
+        path, index, _ = scripts.choose_font(text, path, bold, rtl)  # Inter has no CJK/Arabic glyphs
         size = max(start, minimum)
         while True:
-            font = ImageFont.truetype(path, size)
-            lines, space = wrap(paras, font, max_w)
+            font = scripts.load(path, index, size, rtl)
+            lines, space = wrap(paras, font, max_w, rtl)
             fits = len(lines) <= max_lines and all(w <= max_w for _, w in lines)
             if fits or size <= minimum:
                 break
             size = int(size * 0.96)
         return dict(lines=lines, font=font, space=space, line_h=size * lh, color=color, gap=gap, size=size,
-                    accent_ok=accent_ok)
+                    accent_ok=accent_ok, rtl=rtl)
 
     def draw(self, canvas: Image.Image, top: float, dx: float = 0):
         d = ImageDraw.Draw(canvas, "RGBA")
@@ -278,13 +287,20 @@ class TextBlock:
         for p in self.parts:
             y += p["gap"]
             asc = p["font"].getmetrics()[0]
+            rtl = p["rtl"]
             for words, width in p["lines"]:
-                x = dx + ((self.W - width) / 2 if self.align == "center" else self.margin)
+                # Arapça/İbranice: sağa yaslı (sola yaslı şablonlarda aynalanır), kelimeler sağdan sola dizilir
+                right = rtl and self.align != "center"
+                x = dx + ((self.W - width) / 2 if self.align == "center" else (self.W - self.margin - width if right else self.margin))
+                if rtl:
+                    x += width
                 for i, (w, acc, ww, glued) in enumerate(words):
-                    x += p["space"] if i and not glued else 0
+                    gap_w = p["space"] if i and not glued else 0
                     fill = (*self.accent, 255) if (acc and p["accent_ok"]) else p["color"]
-                    d.text((x, y + asc + (p["line_h"] - p["size"]) / 2 * 0.6), w, font=p["font"], fill=fill, anchor="ls")
-                    x += ww
+                    x += -gap_w - ww if rtl else gap_w
+                    d.text((x, y + asc + (p["line_h"] - p["size"]) / 2 * 0.6), scripts.shape(w, rtl), font=p["font"], fill=fill,
+                           anchor="ls")
+                    x += 0 if rtl else ww
                 y += p["line_h"]
 
 
@@ -583,10 +599,8 @@ def text_problems(cfg: dict, locale: str | None) -> list[str]:
     fp_s = resolve_font("Regular", cfg.get("font"))
     problems = []
     missing = set()
-    for text, path in ((title, fp_t), (subtitle, fp_s)):
-        font = ImageFont.truetype(path, 64)
-        notdef = bytes(font.getmask("\U000F0000"))  # özel kullanım alanı: fontun "eksik karakter" şekli
-        missing |= {c for c in text if not c.isspace() and c != "*" and bytes(font.getmask(c)) == notdef}
+    for text, path, bold in ((title, fp_t, True), (subtitle, fp_s, False)):
+        missing |= set(scripts.choose_font(text, path, bold, scripts.is_rtl(text))[2])
     if missing:
         problems.append(f"characters missing from the font ({''.join(sorted(missing)[:8])}); pass a suitable font with --font.")
     tb = TextBlock(title, subtitle, cw, ch, fp_t, fp_s, (0, 0, 0, 255), (0, 0, 0), cfg.get("align", "center"),
