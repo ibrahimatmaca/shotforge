@@ -402,9 +402,9 @@ Beta (v0.5). CI runs the test-suite on Linux with Python 3.10–3.14 on every pu
   anything that differs with your real installation. The MCP server was exercised with the official MCP client on `mcp` 1.30 and 2.3.
 - Linux/macOS are tested; Windows is untested.
 - Device frames are generic modern-phone drawings, not Apple's official bezels. ~5–6 s per image.
-- Headlines: ≤ 3 lines, subtitles ≤ 2 lines; long text shrinks automatically, and text that still overflows is reported. The bundled Inter font has no Japanese, Korean or Arabic glyphs: shotforge warns, and `--font` selects another font (Arabic also needs Pillow with raqm). Screenshot analysis is a simple heuristic (a hint, not a verdict).
+- Headlines: ≤ 3 lines, subtitles ≤ 2 lines; long text shrinks automatically, and text that still overflows is reported. Japanese, Korean, Chinese, Arabic and Hebrew text uses an installed system font that covers it (Hiragino, Apple SD Gothic Neo, PingFang, Geeza Pro, Noto…), because the bundled Inter font has none of these glyphs; shotforge warns when no installed font covers the text, and `--font` picks a font yourself. Hindi and Thai also need Pillow with Raqm for correct shaping. Screenshot analysis is a simple heuristic (a hint, not a verdict).
 - Tablet output crops a phone screenshot to the tablet ratio; supply real tablet screens. Android output reuses iOS screens unless you supply `android/`.
-- Arabic and Hebrew are not laid out right to left. The App Store header-only 3840x1646 size is not generated.
+- Arabic and Hebrew are shaped and right-aligned; check text that mixes in Latin words or numbers by hand. The App Store header-only 3840x1646 size is not generated.
 
 ## Development
 

@@ -196,3 +196,17 @@ def test_explicit_claude_stops_before_questions(monkeypatch, shots_dir):
     monkeypatch.setattr(builtins, "input", lambda *_: pytest.fail("asked"))
     with pytest.raises(SystemExit, match="claude auth login"):
         cli.main(["create", str(shots_dir), "--ai", "claude", "--ask"])
+
+
+def test_script_notes_follow_installed_fonts(monkeypatch):
+    from shotforge import scripts
+    covered = lambda text, primary, bold, rtl: ("/fonts/Any.ttc", 0, ())  # noqa: E731
+    monkeypatch.setattr(scripts, "choose_font", covered)
+    notes = I.notes_for(("appstore",), [], ["ja", "ko", "ar-SA"])
+    assert not any("--font" in n for n in notes)  # a system font covers them, so no font is asked for
+    assert any("Right-to-left" in n for n in notes)
+
+    missing = lambda text, primary, bold, rtl: (primary, 0, tuple(text))  # noqa: E731
+    monkeypatch.setattr(scripts, "choose_font", missing)
+    note = next(n for n in I.notes_for(("appstore",), [], ["en", "ja", "zh-Hans"]) if "--font" in n)
+    assert note.startswith("ja, zh-Hans:")

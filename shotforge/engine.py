@@ -602,7 +602,8 @@ def text_problems(cfg: dict, locale: str | None) -> list[str]:
     for text, path, bold in ((title, fp_t, True), (subtitle, fp_s, False)):
         missing |= set(scripts.choose_font(text, path, bold, scripts.is_rtl(text))[2])
     if missing:
-        problems.append(f"characters missing from the font ({''.join(sorted(missing)[:8])}); pass a suitable font with --font.")
+        problems.append(f"no installed font has these characters ({''.join(sorted(missing)[:8])}); install a font for this "
+                        "script (for example Noto Sans CJK) or pass one with --font.")
     tb = TextBlock(title, subtitle, cw, ch, fp_t, fp_s, (0, 0, 0, 255), (0, 0, 0), cfg.get("align", "center"),
                    float(cfg.get("title_scale", 1.0)))
     if any(w > cw - 2 * tb.margin for p in tb.parts for _, w in p["lines"]):
