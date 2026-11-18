@@ -374,9 +374,9 @@ Beta (v0.5). CI, testleri her push ve PR'da Linux'ta Python 3.10–3.14 ile, haf
 - CLI mesajları ve `--help` İngilizcedir.
 - Linux/macOS test edilir; Windows denenmedi.
 - Çerçeve genel bir modern telefon çizimidir (Apple'ın resmi bezel'i değil). Görsel başına ~5–6 sn.
-- Başlık ≤ 3, alt başlık ≤ 2 satır; uzun metin otomatik küçülür. Ekran analizi basit bir sezgidir (ipucu, hüküm değil).
+- Başlık ≤ 3, alt başlık ≤ 2 satır; uzun metin otomatik küçülür. Japonca, Korece, Çince, Arapça ve İbranice yazılar için bu yazıyı içeren kurulu bir sistem fontu (Hiragino, Apple SD Gothic Neo, PingFang, Geeza Pro, Noto…) otomatik seçilir, çünkü gömülü Inter fontunda bu harfler yok; uygun font bulunamazsa shotforge uyarır, `--font` ile font kendiniz seçilebilir. Hintçe ve Tayca için doğru harf birleşimi Raqm destekli Pillow ister. Ekran analizi basit bir sezgidir (ipucu, hüküm değil).
 - Tablet çıktısında telefon ekranı verirseniz tablet oranına kırpılır; gerçek tablet ekranı verin. `android/` vermezseniz Android çıktısı iOS ekranlarını kullanır.
-- Arapça ve İbranice sağdan sola dizilmez. App Store'un yalnızca başlıkta kullanılan 3840x1646 boyutu üretilmez.
+- Arapça ve İbranice harfler birleştirilir ve sağa yaslanır; içinde Latin kelime ya da rakam olan metni elle kontrol edin. App Store'un yalnızca başlıkta kullanılan 3840x1646 boyutu üretilmez.
 
 ## Geliştirme
 

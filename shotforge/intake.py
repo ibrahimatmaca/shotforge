@@ -21,8 +21,11 @@ PLAY_MAX_SHOTS = 8
 TABLET_MIN_SHOTS = 4
 # Google Play rehberinin görselde önermediği ifadeler (notes_for ile aynı liste)
 PLAY_AVOID_RE = re.compile(r"\b(best|free|download now)\b|#1", re.I)
-# Inter fontunda karşılığı olmayan yazılar
-NO_GLYPH_LANGS = ("ja", "ko", "zh", "ar", "he", "hi", "th")
+# Inter fontunda karşılığı olmayan yazılar: her biri için sistem fontunda aranan örnek karakterler
+SCRIPT_SAMPLES = {"ja": "あア日", "ko": "한글", "zh": "中文", "ar": "عربي", "fa": "فارسی", "ur": "اردو", "he": "עברית",
+                  "hi": "हिन्दी", "th": "ไทย"}
+# Raqm olmadan harfleri doğru birleşmeyen yazılar (Arapça/İbranice scripts.shape ile ayrıca şekillenir)
+COMPLEX_SHAPING = ("hi", "th")
 
 _BLANK = {"", "auto", "otomatik", "default", "varsayılan", "varsayilan"}
 _NO = {"no", "none", "hayır", "hayir", "false"}
@@ -174,12 +177,35 @@ def notes_for(stores, devices, langs) -> list[str]:
         notes.append("Google Play: device frames and extra text don't break a hard rule, but the guidelines recommend no device images, "
                      "a slogan under 20% of the image, and avoiding phrases like 'Best', '#1', 'Free' and 'Download now'. "
                      "Images that don't follow them may not appear in recommended placements.")
-    no_glyph = [l for l in langs if l.split("-")[0] in NO_GLYPH_LANGS]
-    if no_glyph:
-        notes.append(f"{', '.join(no_glyph)}: the Inter font has no characters for this script; a suitable font (--font) is needed.")
+    no_font, unshaped = script_support(langs)
+    if no_font:
+        notes.append(f"{', '.join(no_font)}: no installed font has characters for this script; install one "
+                     "(for example Noto Sans CJK, Noto Sans Arabic) or pass a font file with --font.")
+    if unshaped:
+        notes.append(f"{', '.join(unshaped)}: this script needs Pillow with Raqm for correct letter shaping; check the output by hand.")
     if any(l.split("-")[0] in ("ar", "he") for l in langs):
-        notes.append("Right-to-left languages are not laid out correctly; check the output by hand.")
+        notes.append("Right-to-left text is shaped and right-aligned; check mixed Latin text and numbers by hand.")
     return notes
+
+
+def script_support(langs) -> tuple[list[str], list[str]]:
+    """(languages no installed font covers, languages that need Raqm shaping Pillow lacks). Inter has no glyphs for
+    these scripts, so slides fall back to a system font (Hiragino, Apple SD Gothic Neo, Noto...) when there is one."""
+    from PIL import features
+
+    from . import engine, scripts
+    primary = engine.resolve_font("Regular", None)
+    no_font, unshaped = [], []
+    for lang in langs:
+        base = lang.split("-")[0]
+        sample = SCRIPT_SAMPLES.get(base)
+        if not sample:
+            continue
+        if scripts.choose_font(sample, primary, False, scripts.is_rtl(sample))[2]:
+            no_font.append(lang)
+        elif base in COMPLEX_SHAPING and not features.check("raqm"):
+            unshaped.append(lang)
+    return no_font, unshaped
 
 
 def check_targets(t) -> dict:

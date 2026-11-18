@@ -47,7 +47,7 @@ def test_cjk_wraps_without_spaces():
 @pytest.mark.parametrize("text", ["日本語の *簡単* な習慣", "تتبع *عاداتك* اليومية بسهولة تامة"])
 def test_text_renders_visible_glyphs(text):
     cfg = dict(device="iphone-6.9", title={"x": text})
-    if E.text_problems(cfg, "x") and any("missing" in m for m in E.text_problems(cfg, "x")):
+    if E.text_problems(cfg, "x") and any("no installed font" in m for m in E.text_problems(cfg, "x")):
         pytest.skip("no system font for this script")
     W, H = E.DEVICES["iphone-6.9"]["size"]
     from PIL import Image
