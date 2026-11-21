@@ -579,6 +579,65 @@ def deco_sparkle(canvas, item, ctx):
     _star(d, cx - W * 0.055, cy + W * 0.070, W * 0.018, col)
 
 
+_BAT = [(0, -0.12), (0.18, -0.55), (0.3, -0.25), (0.55, -0.5), (0.7, -0.2), (1.0, -0.35), (0.85, 0.15), (0.6, 0.1),
+        (0.38, 0.4), (0.15, 0.12), (0.08, 0.3), (0, 0.1)]  # right half; mirrored for the left
+
+
+def _poly(d, cx, cy, r, pts, rot, fill):
+    c, s = math.cos(rot), math.sin(rot)
+    d.polygon([(cx + r * (x * c - y * s), cy + r * (x * s + y * c)) for x, y in pts], fill=fill)
+
+
+def _scatter_shape(d, shape, cx, cy, r, rot, col):
+    if shape == "dot":
+        d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=col)
+    elif shape == "star":
+        _star(d, cx, cy, r, col)
+    elif shape == "snow":
+        w = max(2, int(r * 0.2))
+        for k in range(3):
+            a = rot + k * math.pi / 3
+            d.line((cx - r * math.cos(a), cy - r * math.sin(a), cx + r * math.cos(a), cy + r * math.sin(a)), fill=col, width=w)
+        d.ellipse((cx - w, cy - w, cx + w, cy + w), fill=col)
+    elif shape == "confetti":
+        _poly(d, cx, cy, r, [(-1, -0.45), (1, -0.45), (1, 0.45), (-1, 0.45)], rot, col)
+    elif shape == "heart":
+        pts = [(16 * math.sin(t) ** 3 / 17, -(13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)) / 17)
+               for t in np.linspace(0, 2 * math.pi, 48)]
+        _poly(d, cx, cy, r, pts, rot * 0.25, col)
+    elif shape == "bat":
+        _poly(d, cx, cy, r, [(-x, y) for x, y in reversed(_BAT)] + _BAT, rot * 0.2, col)
+    elif shape == "crescent":
+        d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=col)
+        d.ellipse((cx - r * 0.55, cy - r * 1.05, cx + r * 1.45, cy + r * 0.95), fill=(0, 0, 0, 0))
+    else:
+        raise ValueError(f"unknown scatter shape: {shape}")
+
+
+def deco_scatter(canvas, item, idx, ctx):
+    """Seasonal particles (snow, confetti, bats, hearts …), in front of the phone unless item["behind"]. They keep out of the headline band so text stays readable."""
+    CW, CH = canvas.size
+    rnd = random.Random(idx * 131 + 17)
+    shape = item.get("shape", "dot")
+    cols = [_color(c) for c in (item.get("colors") or [item.get("color")])]
+    alpha = int(255 * float(item.get("alpha", 0.7)))
+    lo, hi = float(item.get("size_min", 0.008)), float(item.get("size_max", 0.02))
+    band = ctx.get("text_band", (0, 0))
+    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    placed = tries = 0
+    n = min(int(item.get("count", 24)), 80)
+    while placed < n and tries < n * 25:
+        tries += 1
+        x, y = rnd.uniform(0.02, 0.98) * CW, rnd.uniform(0.02, 0.98) * CH
+        r = rnd.uniform(lo, hi) * CW
+        if band[0] - r <= y <= band[1] + r:
+            continue
+        _scatter_shape(d, shape, x, y, r, rnd.uniform(0, math.pi), (*cols[placed % len(cols)], alpha))
+        placed += 1
+    canvas.alpha_composite(layer)
+
+
 # --------------------------------------------------------------------------- #
 # Slayt üretimi
 # --------------------------------------------------------------------------- #
@@ -658,10 +717,12 @@ def render_slide(cfg: dict, locale: str | None, idx: int = 0, total: int = 1) ->
 
     title_right = (tb.margin + tb.title_w) if tb.align == "left" else (cw + tb.title_w) / 2
     ctx = dict(text_y=text_y, margin=tb.margin, title_bottom=text_y + tb.title_h, line_y=region[1] - gap * 0.45,
-               title_right=title_right)
+               title_right=title_right, text_band=(text_y - gap, text_y + tb.height + gap))
     for it in deco:  # telefonun arkasında kalanlar
         if it["type"] == "blobs":
             deco_blobs(canvas, it, idx)
+        elif it["type"] == "scatter" and it.get("behind"):
+            deco_scatter(canvas, it, idx, ctx)
         elif it["type"] == "pulse-line":
             deco_pulse_line(canvas, it, idx, ctx)
 
@@ -676,6 +737,9 @@ def render_slide(cfg: dict, locale: str | None, idx: int = 0, total: int = 1) ->
         draw_phone(canvas, shot2 if p.get("second") else shot, dev, colors, p, region,
                    persp=float(cfg.get("perspective", 3.0)), glow=cfg.get("glow"),
                    rim=float(cfg.get("frame_rim", 0.008)))
+    for it in deco:  # mevsimsel parçacıklar telefonun önünde: telefon genişken arkada kalırlarsa görünmezler
+        if it["type"] == "scatter" and not it.get("behind"):
+            deco_scatter(canvas, it, idx, ctx)
     tb.draw(canvas, text_y)
     for it in deco:  # metnin üstüne gelenler
         if it["type"] == "squiggle" and title:

@@ -64,6 +64,9 @@ QUESTIONS = [
     dict(id="texts", question="Who should write the headlines?", kind="choice", options=["ai", "me", "file"], default="ai"),
     dict(id="keywords", question="Which search keywords should the headlines target? (comma-separated)", kind="text", default="none"),
     dict(id="tone", question="What tone should the copy have?", kind="text", default="confident, friendly, benefit-first"),
+    dict(id="theme", question="Do you want a seasonal theme?", kind="choice", options=["none", "newyear", "halloween", "christmas"],
+         default="none", note="Also: valentines, ramadan, summer, blackfriday (see list_themes). A theme sets colours and adds decorations; "
+                              "colours you give below still win."),
     dict(id="background_color", question="Main background colour (#hex)", kind="color", default="from the screenshots"),
     dict(id="text_color", question="Text colour (#hex)", kind="color", default="a readable colour is chosen automatically"),
     dict(id="accent_color", question="Accent colour (#hex)", kind="color", default="from the screenshots or automatic"),

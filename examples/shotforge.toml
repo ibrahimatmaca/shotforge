@@ -5,6 +5,7 @@
 tone = "calm, direct, benefit-first"
 # template = "bubble"            # a built-in template name
 # langs = ["en", "tr"]
+# theme = "newyear"              # seasonal theme: newyear, christmas, halloween, valentines, ramadan, summer, blackfriday
 # font = "assets/Brand-Bold.otf"
 # logo = "assets/logo.png"       # small, in the free band beside the headline; also the header icon if --icon is not given
 
