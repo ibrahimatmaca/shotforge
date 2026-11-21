@@ -27,6 +27,7 @@ one combined image.
 - **Asks before it starts.** The slash command, MCP tools and terminal share one question list; anything left blank gets a default, with colours taken from your screenshots.
 - **App Store and Google Play** from one run: phone and tablet sizes, App Store Header and Search Results images, and the Play feature graphic.
 - **Multi-language in one run** (`--langs en,tr,de`): one folder per language plus a zip, optional per-language screenshots, **App Preview** video converter.
+- **Seasonal themes:** `--theme newyear|christmas|halloween|valentines|ramadan|summer|blackfriday` sets matching colours and adds snow, confetti, bats, hearts and more. Your own colours still win.
 - **Brand file:** `shotforge.toml` keeps colours, font, logo and tone, so every run and every app looks the same.
 - **Maestro capture:** `shotforge capture` runs your flows per language on a booted device and writes the screenshots shotforge reads.
 - **Store tests:** `--variants 2` writes complete sets that differ by copy, design or both, ready for Custom Product Pages and Play experiments.
@@ -112,6 +113,7 @@ Without `-o`, output goes to `./shotforge-out/<app>/`. Add `--sheet` for a singl
 | Device sizes | `--devices iphone-6.9,ipad-13,android-phone,android-tablet-7,android-tablet-10` | iphone-6.9, android-phone |
 | Pages | `--count` | 6–7 |
 | Headlines and tone | `--texts`, `--tone` | written by Claude |
+| Seasonal theme | `--theme halloween` (see `shotforge themes`) | none |
 | Background, text, accent colour | `--bg-color`, `--text-color`, `--accent` | from the screenshots; template default if they are neutral |
 | App icon for the wide images | `--icon` | none |
 | App Preview recording, shared or per language | `--preview rec.mov`, `--preview tr=rec_tr.mov` | skipped |
@@ -248,6 +250,17 @@ accent = "#FDE047"
 ```
 
 `render` keeps the design in the copy file and takes only `font` and `logo` from the brand file. To restyle hand-edited colours, use the render flags.
+
+## Themes
+
+`shotforge themes` lists the seasonal themes: `newyear`, `christmas`, `halloween`, `valentines`, `ramadan`, `summer` and `blackfriday`. A theme fills the background and accent colour and draws decorations (snow, confetti, bats, hearts, crescents) in front of the phone, away from the headline.
+
+```bash
+shotforge create ./screens --app "Habita" --theme halloween
+shotforge render --theme christmas      # restyle an existing copy file
+```
+
+Colours you pass (`--bg-color`, `--accent`, `shotforge.toml`) win over the theme's. Set `theme = "newyear"` under `[brand]` to keep it in the brand file; MCP clients use `list_themes` and the `theme` argument.
 
 ## Keywords
 

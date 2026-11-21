@@ -15,7 +15,7 @@ import zipfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
-from . import brand as B, capture as C, copywriter, intake as I, palette as P, texts as T
+from . import brand as B, capture as C, copywriter, intake as I, palette as P, texts as T, themes as TH
 from .engine import BANNERS, BG_PRESETS, DEVICES, FRAMES, PREVIEW_SIZES, STYLES, render_job, text_problems
 
 HERE = Path(__file__).resolve().parent
@@ -61,6 +61,7 @@ def apply_brand(a):
             c = b["colors"]
             a.bg_color, a.text_color = a.bg_color or c.get("background"), a.text_color or c.get("text")
             a.accent = a.accent or c.get("accent")
+            a.theme = a.theme or b["theme"]
             a.tone = a.tone or b["tone"]
             a.langs = a.langs or ",".join(b["langs"]) or None
             t = canon_template(b["template"])
@@ -420,6 +421,16 @@ def gather_inputs(a, shots: dict[str, Path], langs: list[str], templates: dict, 
             raise SystemExit(f"Invalid colour ({k}): {v}  (example: #6D28D9)")
     if inp["template"] and inp["template"] not in templates and not Path(inp["template"]).exists():
         raise SystemExit(f"Unknown template: {inp['template']}. Available: {', '.join(templates)}")
+    inp["theme"] = None
+    if should_ask(a) and TH.is_none(a.theme) and not inp["colors"]:
+        v = _ask(f"Theme: none or {', '.join(TH.names())} (Enter = none): ").lower()
+        a.theme = v if v in TH.THEMES else None
+    if not TH.is_none(a.theme):
+        try:
+            th = TH.get(a.theme)
+        except ValueError as e:
+            raise SystemExit(str(e))
+        inp["theme"], inp["colors"] = th["name"], {**th["colors"], **inp["colors"]}
     if should_ask(a):
         run_interactive(inp, shots, profile, templates, langs, getattr(a, "no_ai", False))
     if not inp["app"]:
@@ -474,6 +485,8 @@ def cmd_plan(a, quiet=False) -> dict:
     else:
         data, used = copywriter.plan(ctx, shots, backend=a.ai, model=a.model)
     d = data["design"]
+    if inp["theme"]:
+        d["theme"] = inp["theme"]
     out = dict(app=inp["app"], about=inp["about"], tone=a.tone, langs=langs, generated_with=used,
                design=d, shots={n: rel(p, copy_path.parent) for n, p in shots.items()}, slides=data["slides"])
     if sets:
@@ -510,6 +523,8 @@ def print_design(d: dict):
     c = d.get("colors") or {}
     print("\nDesign decision:")
     print(f"  template   : {d['template']}  ({d['dimension'].upper()})   — {d.get('template_reason', '')}")
+    if d.get("theme"):
+        print(f"  theme      : {d['theme']}")
     print(f"  category   : {d.get('category') or '?'}")
     print(f"  pages      : {d['count']}")
     print(f"  background : {c.get('background') or '(template default)'}   text: {c.get('text') or '(auto)'}   accent: {c.get('accent') or '(auto)'}")
@@ -528,6 +543,8 @@ def slide_cfg(a, tpl, pal, idx, slide, shot_paths, names, warnings) -> dict:
     cfg.update(P.resolve_placeholders(tpl.get("defaults", {}), tokens))
     cfg.update(st)
     cfg["style"] = layouts[idx % len(layouts)]
+    if getattr(a, "theme", None):
+        cfg["deco"] = [*cfg.get("deco", []), *TH.get(a.theme)["deco"]]
     if a.style:
         cfg["style"] = a.style
     if a.bg:  # ileri düzey: ham arka plan (preset / degrade / görsel)
@@ -576,6 +593,14 @@ def cmd_render(a, data: dict | None = None):
         print(f"WARNING: {copy_path} loads a local template file: {tname}", file=sys.stderr)
     tpl = load_template(tname)
     colors = dict(design.get("colors") or {})
+    explicit = None if TH.is_none(getattr(a, "theme", None)) else a.theme
+    try:
+        th = TH.get(explicit or design.get("theme")) if (explicit or not TH.is_none(design.get("theme"))) else None
+    except ValueError as e:
+        raise SystemExit(str(e))
+    a.theme = th["name"] if th else None
+    if th and explicit and from_file:  # `render --theme X` restyles an existing copy file; create already merged the theme into design.colors
+        colors.update(th["colors"])
     for flag, key in (("bg_color", "background"), ("text_color", "text"), ("accent", "accent")):
         if getattr(a, flag, None):
             colors[key] = getattr(a, flag)
@@ -1019,6 +1044,13 @@ def cmd_templates(a):
                 print(f"  {'':11s} best for: {', '.join(v.get('best_for', []))}" + (f"   ↳ {v['inspired_by']}" if v.get("inspired_by") else ""))
 
 
+def cmd_themes(a):
+    for n, t in TH.THEMES.items():
+        c = t["colors"]
+        print(f"  {n:<12} {t['label']:<16} {c['background']} / {c['accent']}  {t['description']}")
+    print("\nUse: shotforge create … --theme halloween   (your own --bg-color / --accent still win)")
+
+
 def cmd_rules(_):
     print(P.RULES_TEXT)
 
@@ -1090,6 +1122,7 @@ MCP_TOOLS = {
     "get_intake_questions": "the questions to ask you before generating anything",
     "analyze_screenshots": "colour, theme and density analysis plus a 2D/3D recommendation",
     "list_templates": "the 2D and 3D template catalogue",
+    "list_themes": "the seasonal themes (new year, halloween, christmas, …)",
     "create_screenshots": "write separate images per page and language, plus an overview",
     "render_screenshots": "redraw from shotforge.copy.json after editing it",
     "convert_app_preview": "convert a screen recording to App Preview specs (ffmpeg)",
@@ -1200,6 +1233,7 @@ def add_design_args(p):
     g = p.add_argument_group("design inputs (the AI or the rules decide anything left out)")
     g.add_argument("--template", default="auto", help="auto | template name | .json path (see shotforge templates)")
     g.add_argument("--dimension", default="auto", choices=["auto", "2d", "3d"], help="template family; auto = the rules or the AI choose")
+    g.add_argument("--theme", default=None, metavar="NAME", help="seasonal theme: " + ", ".join(TH.names()) + " (see shotforge themes); your own colours win")
     g.add_argument("--bg-color", default=None, metavar="#HEX", help="main background colour")
     g.add_argument("--text-color", default=None, metavar="#HEX", help="text colour (corrected per slide, with a warning, if unreadable)")
     g.add_argument("--accent", default=None, metavar="#HEX", help="accent colour")
@@ -1265,6 +1299,7 @@ def main(argv=None):
     r = sub.add_parser("render", help="redraw from an existing copy file")
     r.add_argument("shots", nargs="*", help="(optional) replace the screenshots")
     r.add_argument("--template", default=None, help="override the template in the file")
+    r.add_argument("--theme", default=None, metavar="NAME", help="restyle with a theme: " + ", ".join(TH.names()))
     r.add_argument("--bg-color", default=None, metavar="#HEX")
     r.add_argument("--text-color", default=None, metavar="#HEX")
     r.add_argument("--accent", default=None, metavar="#HEX")
@@ -1288,6 +1323,9 @@ def main(argv=None):
     t = sub.add_parser("templates", help="list templates by 2D and 3D")
     t.add_argument("--show", help="show a template's JSON")
     t.set_defaults(fn=cmd_templates)
+
+    th = sub.add_parser("themes", help="list the seasonal themes (new year, halloween, …)")
+    th.set_defaults(fn=cmd_themes)
 
     s = sub.add_parser("sizes", help="show store image sizes")
     s.set_defaults(fn=cmd_sizes)

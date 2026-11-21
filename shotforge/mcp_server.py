@@ -32,7 +32,7 @@ except ImportError:
     except ImportError as e:  # pragma: no cover
         raise SystemExit('The MCP server needs the "mcp" package:  pip install "shotforge[mcp]"\nSetup guide:  shotforge mcp') from e
 
-from . import brand as B, cli, copywriter, intake as I, palette as P
+from . import brand as B, cli, copywriter, intake as I, palette as P, themes as TH
 from .engine import DEVICES, PREVIEW_SIZES
 
 mcp = _Server(
@@ -143,6 +143,14 @@ def list_templates() -> list[dict]:
 
 @mcp.tool()
 @_safe
+def list_themes() -> list[dict]:
+    """List the seasonal themes (new year, halloween, christmas, …) for create_screenshots(theme=...). Each sets a background and
+    accent colour and adds decorations (snow, confetti, bats, hearts …) behind the phone; colours you pass explicitly win."""
+    return [dict(name=n, label=t["label"], colors=t["colors"], description=t["description"]) for n, t in TH.THEMES.items()]
+
+
+@mcp.tool()
+@_safe
 def get_intake_questions(shots: Optional[list[str]] = None, app: str = "", about: str = "") -> dict:
     """Call this FIRST, even before the user has given screenshots. Without shots it returns only the questions needed to find
     them; ask those, then call it again. With shots it returns the questions to ask before generating, with defaults computed from them.
@@ -207,7 +215,7 @@ def _brand(path: Optional[str]) -> dict:
 
 def _create(shots, app, slides, langs, template, dimension, background_color, text_color, accent_color, count, about,
             category, tone, out_dir, device, layout, fmt, only, jobs, style, *, targets=None, previews=None, icon=None, banner=None,
-            keywords=None, font=None, logo=None):
+            keywords=None, font=None, logo=None, theme=None):
     keywords = copywriter.parse_keywords(keywords)
     langs = [l.strip() for l in langs if l.strip()] or ["en"]
     cli.check_langs(langs)
@@ -218,6 +226,9 @@ def _create(shots, app, slides, langs, template, dimension, background_color, te
     colors ={k: v for k, v in (("background", _valid_hex(background_color, "background_color")),
                                 ("text", _valid_hex(text_color, "text_color")),
                                 ("accent", _valid_hex(accent_color, "accent_color"))) if v}
+    th = None if TH.is_none(theme) else TH.get(theme)
+    if th:
+        colors = {**th["colors"], **colors}
     locked = []
     for i, s in enumerate(slides or [], 1):
         s = dict(s)
@@ -241,6 +252,8 @@ def _create(shots, app, slides, langs, template, dimension, background_color, te
                fixed=dict(colors=colors, count=n, template=tname, dimension=dim, category=category))
     placeholder = not locked or copywriter._locked_missing(locked, n or len(locked), langs)
     data = copywriter.finalize(None, ctx, list(sm))
+    if th:
+        data["design"]["theme"] = th["name"]
     out = _abs(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     copy_path = out / "shotforge.copy.json"
@@ -275,7 +288,7 @@ def _render(copy_path: Path, out: Path, device, layout, fmt, only, jobs, style, 
         copy=str(copy_path), out=str(out), device=device, layout=layout, format=fmt, jobs=jobs, style=style or None, bg=None,
         frame=None, text_position=None, align=None, font=font, logo=logo, perspective=None, no_grain=False,
         only=",".join(map(str, only)) if only else None, sheet=False, brief=False, shots=[],
-        template=ov.get("template"), bg_color=ov.get("background"), text_color=ov.get("text"), accent=ov.get("accent"),
+        template=ov.get("template"), theme=ov.get("theme"), bg_color=ov.get("background"), text_color=ov.get("text"), accent=ov.get("accent"),
         langs=",".join(langs) if langs else None, previews=previews, icon=str(_abs(icon)) if icon else None)
     with _Quiet():
         by_lang = cli.cmd_render(a)
@@ -328,6 +341,7 @@ async def create_screenshots(
     output: Optional[str] = None,
     keywords: Optional[list[str]] = None,
     brand_file: Optional[str] = None,
+    theme: Optional[str] = None,
 ) -> list:
     """Create store images: ONE SEPARATE IMAGE FILE per page per language, for every store target.
 
@@ -351,7 +365,9 @@ async def create_screenshots(
     layout: 'store' (default), 'flat' (out/<lang>/NN_<lang>.png, one device), 'asc' (out/<locale>/<DISPLAY_TYPE>/NN_<lang>.png) or
         'fastlane' (out/fastlane/screenshots/<locale>/… and out/fastlane/metadata/android/<locale>/images/…).
     keywords: the search keywords your slide copy targets; the result lists any not found word for word.
-    brand_file: path to a shotforge.toml; it fills template, colours, tone and langs you left out, and adds its font and logo.
+    brand_file: path to a shotforge.toml; it fills template, colours, tone, langs and theme you left out, and adds its font and logo.
+    theme: a seasonal theme from list_themes (newyear, halloween, christmas, valentines, ramadan, summer, blackfriday): its colours
+        fill any you left out and its decorations are drawn on every page. Blank or 'none' = no theme.
     only: render only these 1-based page numbers (faster iteration). Returns file paths and a small overview image."""
     if not intake_completed:
         raise ToolError("Ask the user the get_intake_questions questions first, then call again with intake_completed=true. "
@@ -365,6 +381,7 @@ async def create_screenshots(
         template = b["template"]
     if tone == cli.DEFAULT_TONE:
         tone = b.get("tone") or tone
+    theme = theme if not TH.is_none(theme) else b.get("theme")
     resolved_langs = langs or b.get("langs") or list(I.DEFAULT_LANGS)
     if not device:
         r = I.resolve(dict(store=store, header_sizes=header_sizes, langs=resolved_langs, devices=devices, previews=previews, output=output))
@@ -373,7 +390,7 @@ async def create_screenshots(
     res = await asyncio.to_thread(_create, shots, app, slides, resolved_langs, template, dimension, background_color,
                                   text_color, accent_color, count, about, category, tone, out_dir, device, layout,
                                   format, only, jobs, style, targets=targets, previews=resolved_previews, icon=icon or b.get("logo"), banner=banner,
-                                  keywords=keywords, font=b.get("font"), logo=b.get("logo"))
+                                  keywords=keywords, font=b.get("font"), logo=b.get("logo"), theme=theme)
     content: list = [json.dumps(res, ensure_ascii=False, indent=2)]
     if Path(res["overview"]).exists():
         content.append(Image(path=res["overview"]))
@@ -396,9 +413,11 @@ async def render_screenshots(
     jobs: int = 2,
     icon: Optional[str] = None,
     brand_file: Optional[str] = None,
+    theme: Optional[str] = None,
 ) -> list:
     """Re-render from a shotforge.copy.json (written by create_screenshots, editable by hand): use after fixing text or
     trying another template/colours. Overrides are optional. Pass brand_file again if the images use its font and logo.
+    theme: restyle with a seasonal theme from list_themes (replaces the copy file's colours; explicit colour arguments still win).
     Returns file paths and a small overview image."""
     cp = _abs(copy_file)
     if not cp.exists():
@@ -409,7 +428,9 @@ async def render_screenshots(
     if template:
         template = _builtin_template(template)
     out = _abs(out_dir) if out_dir else cp.parent
-    ov = dict(template=template, background=_valid_hex(background_color, "background_color"),
+    if not TH.is_none(theme):
+        TH.get(theme)
+    ov = dict(theme=theme, template=template, background=_valid_hex(background_color, "background_color"),
               text=_valid_hex(text_color, "text_color"), accent=_valid_hex(accent_color, "accent_color"))
     b = _brand(brand_file)
     res = await asyncio.to_thread(_render, cp, out, device, layout, format, only, jobs, None, None, ov, None, icon or b.get("logo"),

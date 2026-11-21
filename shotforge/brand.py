@@ -12,13 +12,13 @@ try:
 except ModuleNotFoundError:  # Python 3.10
     import tomli as tomllib
 
-from . import palette as P
+from . import palette as P, themes as TH
 
 FILE_NAME = "shotforge.toml"
 FONT_EXT = {".ttf", ".otf", ".ttc"}
 LOGO_EXT = {".png", ".jpg", ".jpeg", ".webp"}
 COLOR_KEYS = ("background", "text", "accent")
-BRAND_KEYS = {"colors", "font", "logo", "tone", "langs", "template"}
+BRAND_KEYS = {"colors", "font", "logo", "tone", "langs", "template", "theme"}
 
 
 def find(start: Path) -> Path | None:
@@ -62,14 +62,19 @@ def load(path) -> dict:
     for k, v in colors.items():
         if not isinstance(v, str) or not P.is_hex(v):
             raise ValueError(f"{path}: brand.colors.{k} must be a hex colour like #6D28D9")
-    for k in ("tone", "template"):
+    for k in ("tone", "template", "theme"):
         if k in b and not isinstance(b[k], str):
             raise ValueError(f"{path}: brand.{k} must be text")
     langs = b.get("langs", [])
     if not isinstance(langs, list) or not all(isinstance(l, str) for l in langs):
         raise ValueError(f"{path}: brand.langs must be a list like [\"en\", \"tr\"]")
+    if b.get("theme") and not TH.is_none(b["theme"]):
+        try:
+            TH.get(b["theme"])
+        except ValueError as e:
+            raise ValueError(f"{path}: brand.theme: {e}") from None
     root = path.resolve().parent
-    out = dict(colors=colors, tone=b.get("tone"), template=b.get("template"), langs=langs, font=None, logo=None)
+    out = dict(colors=colors, tone=b.get("tone"), template=b.get("template"), theme=b.get("theme"), langs=langs, font=None, logo=None)
     if "font" in b:
         out["font"] = _inside(root, b["font"], FONT_EXT, "font", path)
     if "logo" in b:
