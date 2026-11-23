@@ -21,14 +21,16 @@ def test_every_theme_is_well_formed():
     from shotforge import engine, palette as P
     for name, t in TH.THEMES.items():
         assert all(P.is_hex(c) for c in t["colors"].values()), name
-        assert t["deco"] and all(d["type"] == "scatter" for d in t["deco"]), name
+        assert t["deco"] and all(d["type"] in ("scatter", "sticker") for d in t["deco"]), name
         for d in t["deco"]:
             img = Image.new("RGBA", (400, 800))
-            engine.deco_scatter(img, d, 0, dict(text_band=(0, 100)))  # raises on an unknown shape
+            draw = engine.deco_scatter if d["type"] == "scatter" else engine.deco_sticker
+            draw(img, d, 0, dict(text_band=(0, 100)))  # raises on an unknown shape or sticker set
 
 
 def test_get_accepts_loose_names_and_rejects_unknown():
-    assert TH.get("New-Year")["name"] == "newyear" and TH.get("Halloween")["name"] == "halloween"
+    assert TH.get("New-Year")["name"] == TH.get("christmas")["name"] == TH.get("Noel")["name"] == "holidays"
+    assert TH.get("Halloween")["name"] == "halloween"
     with pytest.raises(ValueError, match="Available"):
         TH.get("easter-bunny")
 
@@ -63,7 +65,7 @@ def test_render_draws_theme_decorations_and_can_restyle(shots_dir, tmp_path):
     assert np.abs(plain - themed).mean() > 5  # new colours and snow
     # restyle from the file's own theme: plan with a theme, render without a flag
     t = plan(shots_dir, tmp_path / "t.json", "--theme", "newyear", "--template", "halo")
-    assert t["design"]["theme"] == "newyear"
+    assert t["design"]["theme"] == "holidays"
     assert np.abs(plain - _render(tmp_path / "t.json", tmp_path / "ny")).mean() > 5
 
 
@@ -80,3 +82,17 @@ def test_themes_command_lists_all(capsys):
     run("themes")
     out = capsys.readouterr().out
     assert all(n in out for n in TH.names())
+
+
+def test_holiday_stickers_land_beside_the_phone_not_on_the_headline():
+    from shotforge import engine
+    files = engine.sticker_files("holidays")
+    assert len(files) >= 6
+    for idx in range(4):
+        img = Image.new("RGBA", (1290, 2796), (0, 0, 0, 0))
+        engine.deco_sticker(img, dict(set="holidays", count=3), idx, dict(text_band=(150, 700)))
+        a = np.asarray(img)[:, :, 3]
+        assert a.any() and not a[150:700].any()
+        assert not a[:, 450:840].any()  # centre column stays clear for the phone
+    with pytest.raises(ValueError, match="sticker set"):
+        engine.sticker_files("nope")

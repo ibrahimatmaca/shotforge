@@ -37,7 +37,7 @@ shotforge-mcp = "shotforge.mcp_server:main"
 packages = ["shotforge", "shotforge.data", "shotforge.fonts", "shotforge.templates"]
 
 [tool.setuptools.package-data]
-"shotforge.data" = ["*"]
+"shotforge.data" = ["*", "stickers/*/*.png"]
 "shotforge.fonts" = ["*"]
 "shotforge.templates" = ["*.json"]
 

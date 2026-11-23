@@ -424,7 +424,7 @@ def gather_inputs(a, shots: dict[str, Path], langs: list[str], templates: dict, 
     inp["theme"] = None
     if should_ask(a) and TH.is_none(a.theme) and not inp["colors"]:
         v = _ask(f"Theme: none or {', '.join(TH.names())} (Enter = none): ").lower()
-        a.theme = v if v in TH.THEMES else None
+        a.theme = v if v in TH.THEMES or v in ("newyear", "christmas", "yilbasi", "noel") else None
     if not TH.is_none(a.theme):
         try:
             th = TH.get(a.theme)
@@ -1122,7 +1122,7 @@ MCP_TOOLS = {
     "get_intake_questions": "the questions to ask you before generating anything",
     "analyze_screenshots": "colour, theme and density analysis plus a 2D/3D recommendation",
     "list_templates": "the 2D and 3D template catalogue",
-    "list_themes": "the seasonal themes (new year, halloween, christmas, …)",
+    "list_themes": "the seasonal themes (christmas & new year, halloween, …)",
     "create_screenshots": "write separate images per page and language, plus an overview",
     "render_screenshots": "redraw from shotforge.copy.json after editing it",
     "convert_app_preview": "convert a screen recording to App Preview specs (ffmpeg)",

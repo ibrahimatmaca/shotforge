@@ -144,7 +144,7 @@ def list_templates() -> list[dict]:
 @mcp.tool()
 @_safe
 def list_themes() -> list[dict]:
-    """List the seasonal themes (new year, halloween, christmas, …) for create_screenshots(theme=...). Each sets a background and
+    """List the seasonal themes (christmas & new year, halloween, …) for create_screenshots(theme=...). Each sets a background and
     accent colour and adds decorations (snow, confetti, bats, hearts …) behind the phone; colours you pass explicitly win."""
     return [dict(name=n, label=t["label"], colors=t["colors"], description=t["description"]) for n, t in TH.THEMES.items()]
 
@@ -366,7 +366,7 @@ async def create_screenshots(
         'fastlane' (out/fastlane/screenshots/<locale>/… and out/fastlane/metadata/android/<locale>/images/…).
     keywords: the search keywords your slide copy targets; the result lists any not found word for word.
     brand_file: path to a shotforge.toml; it fills template, colours, tone, langs and theme you left out, and adds its font and logo.
-    theme: a seasonal theme from list_themes (newyear, halloween, christmas, valentines, ramadan, summer, blackfriday): its colours
+    theme: a seasonal theme from list_themes (holidays = christmas & new year, halloween, valentines, ramadan, summer, blackfriday): its colours
         fill any you left out and its decorations are drawn on every page. Blank or 'none' = no theme.
     only: render only these 1-based page numbers (faster iteration). Returns file paths and a small overview image."""
     if not intake_completed:
