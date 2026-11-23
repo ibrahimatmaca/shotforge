@@ -25,7 +25,7 @@ her dilde başlık metinlerini yazar. Bunların herhangi birini siz de belirleye
 - **Başlamadan sorar.** Slash komutu, MCP araçları ve terminal aynı soru listesini kullanır; boş bırakılan alan varsayılan alır, renkler ekran görüntülerinizden gelir.
 - Tek çalıştırmada **App Store ve Google Play**: telefon ve tablet boyutları, App Store Header and Search Results görselleri, Play feature graphic.
 - Tek komutta **çok dilli** çıktı (`--langs en,tr,de`): her dile bir klasör ve zip, isteğe bağlı dile özel ekran görüntüleri, **App Preview** video dönüştürücü.
-- **Mevsimlik temalar:** `--theme newyear|christmas|halloween|valentines|ramadan|summer|blackfriday` uygun renkleri seçer; kar, konfeti, yarasa, kalp gibi süsler ekler. Verdiğiniz renkler yine önceliklidir.
+- **Mevsimlik temalar:** `--theme holidays|halloween|valentines|ramadan|summer|blackfriday` uygun renkleri seçer; kar, konfeti, yarasa, kalp, yılbaşı çıkartmaları gibi süsler ekler. Verdiğiniz renkler yine önceliklidir.
 - **Marka dosyası:** `shotforge.toml` renk, font, logo ve tonu tutar; her çalıştırma ve her uygulama aynı görünür.
 - **Maestro ile çekim:** `shotforge capture` akışlarınızı açık cihazda dil başına çalıştırır ve shotforge'un okuduğu ekran görüntülerini yazar.
 - **Mağaza testleri:** `--variants 2`, metni, tasarımı veya ikisi birden farklı tam setler yazar; Custom Product Pages ve Play deneylerine hazırdır.
@@ -236,14 +236,14 @@ accent = "#FDE047"
 
 ## Temalar
 
-`shotforge themes` mevsimlik temaları listeler: `newyear` (yılbaşı), `christmas`, `halloween` (cadılar bayramı), `valentines`, `ramadan`, `summer` ve `blackfriday`. Tema arka plan ve vurgu rengini doldurur; telefonun önüne, başlıktan uzak kar, konfeti, yarasa, kalp, hilal gibi süsler çizer.
+`shotforge themes` mevsimlik temaları listeler: `holidays` (yılbaşı ve Noel tek temada; Noel Baba, ren geyiği, ağaç, hediye çıkartmalarıyla; `newyear` ve `christmas` adları da çalışır), `halloween` (cadılar bayramı), `valentines`, `ramadan`, `summer` ve `blackfriday`. Tema arka plan ve vurgu rengini doldurur; telefonun önüne, başlıktan uzak kar, konfeti, yarasa, kalp, hilal gibi süsler çizer.
 
 ```bash
 shotforge create ./ekranlar --app "Habita" --theme halloween
-shotforge render --theme christmas      # var olan copy dosyasını yeniden biçimlendirir
+shotforge render --theme holidays       # var olan copy dosyasını yeniden biçimlendirir
 ```
 
-Verdiğiniz renkler (`--bg-color`, `--accent`, `shotforge.toml`) temanın renklerinin önüne geçer. Marka dosyasında `[brand]` altına `theme = "newyear"` yazarak kalıcı yapabilirsiniz; MCP istemcileri `list_themes` aracını ve `theme` argümanını kullanır.
+Verdiğiniz renkler (`--bg-color`, `--accent`, `shotforge.toml`) temanın renklerinin önüne geçer. Marka dosyasında `[brand]` altına `theme = "holidays"` yazarak kalıcı yapabilirsiniz; MCP istemcileri `list_themes` aracını ve `theme` argümanını kullanır.
 
 ## Anahtar kelimeler
 

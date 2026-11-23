@@ -27,7 +27,7 @@ one combined image.
 - **Asks before it starts.** The slash command, MCP tools and terminal share one question list; anything left blank gets a default, with colours taken from your screenshots.
 - **App Store and Google Play** from one run: phone and tablet sizes, App Store Header and Search Results images, and the Play feature graphic.
 - **Multi-language in one run** (`--langs en,tr,de`): one folder per language plus a zip, optional per-language screenshots, **App Preview** video converter.
-- **Seasonal themes:** `--theme newyear|christmas|halloween|valentines|ramadan|summer|blackfriday` sets matching colours and adds snow, confetti, bats, hearts and more. Your own colours still win.
+- **Seasonal themes:** `--theme holidays|halloween|valentines|ramadan|summer|blackfriday` sets matching colours and adds snow, confetti, bats, hearts, holiday stickers and more. Your own colours still win.
 - **Brand file:** `shotforge.toml` keeps colours, font, logo and tone, so every run and every app looks the same.
 - **Maestro capture:** `shotforge capture` runs your flows per language on a booted device and writes the screenshots shotforge reads.
 - **Store tests:** `--variants 2` writes complete sets that differ by copy, design or both, ready for Custom Product Pages and Play experiments.
@@ -253,14 +253,14 @@ accent = "#FDE047"
 
 ## Themes
 
-`shotforge themes` lists the seasonal themes: `newyear`, `christmas`, `halloween`, `valentines`, `ramadan`, `summer` and `blackfriday`. A theme fills the background and accent colour and draws decorations (snow, confetti, bats, hearts, crescents) in front of the phone, away from the headline.
+`shotforge themes` lists the seasonal themes: `holidays` (Christmas and New Year in one, with Santa, reindeer, tree and gift stickers; `newyear` and `christmas` still work), `halloween`, `valentines`, `ramadan`, `summer` and `blackfriday`. A theme fills the background and accent colour and draws decorations (snow, confetti, bats, hearts, crescents) in front of the phone, away from the headline.
 
 ```bash
 shotforge create ./screens --app "Habita" --theme halloween
-shotforge render --theme christmas      # restyle an existing copy file
+shotforge render --theme holidays       # restyle an existing copy file
 ```
 
-Colours you pass (`--bg-color`, `--accent`, `shotforge.toml`) win over the theme's. Set `theme = "newyear"` under `[brand]` to keep it in the brand file; MCP clients use `list_themes` and the `theme` argument.
+Colours you pass (`--bg-color`, `--accent`, `shotforge.toml`) win over the theme's. Set `theme = "holidays"` under `[brand]` to keep it in the brand file; MCP clients use `list_themes` and the `theme` argument.
 
 ## Keywords
 

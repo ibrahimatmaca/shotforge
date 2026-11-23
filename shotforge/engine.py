@@ -638,6 +638,50 @@ def deco_scatter(canvas, item, idx, ctx):
     canvas.alpha_composite(layer)
 
 
+STICKER_DIR = Path(__file__).parent / "data" / "stickers"
+_STICKER_SLOTS = [("left", 0.34), ("right", 0.58), ("left", 0.84), ("right", 0.30), ("left", 0.60), ("right", 0.86)]
+
+
+def sticker_files(name: str) -> list[Path]:
+    """PNG stickers of a set under data/stickers/<name>/, in a stable order."""
+    folder = STICKER_DIR / name
+    files = sorted(folder.glob("*.png")) if folder.is_dir() else []
+    if not files:
+        raise ValueError(f"unknown sticker set: {name}")
+    return files
+
+
+def deco_sticker(canvas, item, idx, ctx):
+    """Die-cut stickers (Santa, a gift …) along the left and right edges, over the phone's border, with a soft shadow.
+    Each slide shows a different few from the set, and they keep out of the headline band."""
+    CW, CH = canvas.size
+    files = sticker_files(item.get("set", "holidays"))
+    n = max(0, min(int(item.get("count", 3)), len(_STICKER_SLOTS)))
+    rnd = random.Random(idx * 977 + 5)
+    lo, hi = float(item.get("size_min", 0.15)), float(item.get("size_max", 0.19))
+    band = ctx.get("text_band", (0, 0))
+    start = (idx * 3) % len(_STICKER_SLOTS)
+    for k in range(n):
+        side, fy = _STICKER_SLOTS[(start + k) % len(_STICKER_SLOTS)]
+        img = Image.open(files[(idx * n + k) % len(files)]).convert("RGBA")
+        w = int(rnd.uniform(lo, hi) * CW)
+        img = img.resize((w, max(1, round(img.height * w / img.width))), Image.LANCZOS)
+        img = img.rotate(rnd.uniform(-14, 14) * (1 if side == "left" else -1), Image.BICUBIC, expand=True)
+        cx = (rnd.uniform(0.04, 0.08) if side == "left" else rnd.uniform(0.92, 0.96)) * CW
+        cy = fy * CH
+        if band[0] - img.height / 2 <= cy <= band[1] + img.height / 2:  # metnin üstüne binmesin
+            cy = band[1] + img.height / 2 + CH * 0.01
+        x, y = int(cx - img.width / 2), int(min(cy, CH - img.height / 2) - img.height / 2)
+        shadow = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        shadow.putalpha(img.getchannel("A").point(lambda v: int(v * 0.35)))
+        shadow = shadow.filter(ImageFilter.GaussianBlur(max(2, w // 40)))
+        off = max(2, w // 45)
+        layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        layer.paste(shadow, (x + off, y + off * 2), shadow)
+        layer.alpha_composite(img, (max(0, x), max(0, y)), (max(0, -x), max(0, -y)))
+        canvas.alpha_composite(layer)
+
+
 # --------------------------------------------------------------------------- #
 # Slayt üretimi
 # --------------------------------------------------------------------------- #
@@ -740,6 +784,9 @@ def render_slide(cfg: dict, locale: str | None, idx: int = 0, total: int = 1) ->
     for it in deco:  # mevsimsel parçacıklar telefonun önünde: telefon genişken arkada kalırlarsa görünmezler
         if it["type"] == "scatter" and not it.get("behind"):
             deco_scatter(canvas, it, idx, ctx)
+    for it in deco:  # çıkartmalar parçacıkların da önünde
+        if it["type"] == "sticker":
+            deco_sticker(canvas, it, idx, ctx)
     tb.draw(canvas, text_y)
     for it in deco:  # metnin üstüne gelenler
         if it["type"] == "squiggle" and title:
