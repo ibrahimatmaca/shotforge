@@ -1,0 +1,36 @@
+{
+  "name": "editorial",
+  "dimension": "2d",
+  "theme": "colorful",
+  "best_for": [
+    "food",
+    "lifestyle",
+    "health",
+    "shopping",
+    "photo"
+  ],
+  "description": "2D · flat warm colour, serif headline with italic emphasis words, and a phone that runs across two slides.",
+  "design_notes": "Magazine-like look. One flat warm colour fills every slide. Headlines are serif, centred, with the emphasis words in italic (not in another colour). Some slides pair up: the phone is cut by the slide edge and continues on the next slide. Needs a system serif font such as Georgia; falls back to the bundled sans.",
+  "palette": {
+    "background": "#F2B63C",
+    "accent": "#2B1B0E"
+  },
+  "bg_mode": "solid",
+  "defaults": {
+    "align": "center",
+    "title_scale": 0.95,
+    "title_weight": "Bold",
+    "font": "serif",
+    "accent_style": "italic",
+    "frame": "black"
+  },
+  "layouts": [
+    "peek-flat",
+    "pan-r",
+    "pan-l",
+    "peek-flat",
+    "pan-r",
+    "pan-l",
+    "peek-flat"
+  ]
+}

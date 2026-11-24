@@ -151,7 +151,7 @@ def slide_style(tpl: dict, pal: dict, idx: int, warnings: list) -> dict:
     """Şablonun bg_mode'una göre slayt başına arka plan, yazı ve vurgu rengi. Placeholder token'larını da döndürür."""
     bg, ac = pal["bg"], pal["accent"]
     mode = tpl.get("bg_mode")
-    angle, no_glow = 160, True
+    angle, no_glow, frame_auto = 160, True, None
 
     if mode is None:  # eski tarz şablon: bg_cycle
         cyc = tpl.get("bg_cycle") or [{"bg": "violet"}]
@@ -171,6 +171,28 @@ def slide_style(tpl: dict, pal: dict, idx: int, warnings: list) -> dict:
     elif mode == "gradient":
         stops, no_glow = [darken(bg, 0.45), bg, pal["bg_warm"]], False
         text, accent = best_text(bg), ac
+    elif mode == "solid":  # one flat brand colour, almost no gradient
+        stops, angle = [bg, darken(bg, 0.05)], 165
+        text, accent = best_text(bg), (ac if pal["user_accent"] else best_text(bg))
+    elif mode == "solid-light":  # warm paper-like tone with dark text
+        stops, angle = [lighten(bg, 0.90), lighten(bg, 0.85)], 165
+        text, accent = darken(bg, 0.78), (ac if pal["user_accent"] else darken(bg, 0.55))
+    elif mode == "alternate":  # pale and saturated slides in turn; the bezel flips with them
+        if idx % 2 == 0:
+            stops, angle = [lighten(bg, 0.90), lighten(bg, 0.84)], 165
+            text = bg if contrast(bg, stops[0]) >= 3.2 else darken(bg, 0.30)
+            accent, frame_auto = (ac if pal["user_accent"] else darken(bg, 0.35)), rgb2hex(bg)
+        else:
+            stops, angle = [bg, darken(bg, 0.08)], 165
+            text = WHITE if contrast(WHITE, bg) >= 3 else best_text(bg)
+            accent, frame_auto = (ac if pal["user_accent"] else lighten(bg, 0.80)), "#FFFFFF"
+    elif mode == "dark-then-light":  # dark opening slide with a glow, then clean light slides
+        if idx == 0:
+            stops, angle = [darken(bg, 0.85), darken(bg, 0.55)], 165
+            text, accent = best_text(stops[0]), (ac if pal["user_accent"] else lighten(bg, 0.55))
+        else:
+            stops = [lighten(bg, 0.95), lighten(bg, 0.88)]
+            text, accent = darken(bg, 0.82), (ac if pal["user_accent"] else bg)
     elif mode == "light-gradient":
         stops = [lighten(bg, 0.90), lighten(bg, 0.66)]
         text, accent = darken(bg, 0.72), (ac if pal["user_accent"] else bg)
@@ -192,13 +214,14 @@ def slide_style(tpl: dict, pal: dict, idx: int, warnings: list) -> dict:
     accent = ensure_accent_contrast(accent, stops)
     spec = ",".join(rgb2hex(c) for c in stops)
     return dict(bg=spec, bg_angle=angle, text_color=rgb2hex(text), accent=rgb2hex(accent), no_glow=no_glow,
-                tokens=_tokens(pal, accent, text))
+                tokens=_tokens(pal, accent, text, frame_auto))
 
 
-def _tokens(pal, accent, text) -> dict[str, str]:
+def _tokens(pal, accent, text, frame_auto=None) -> dict[str, str]:
     t = {k: rgb2hex(pal[k]) for k in ("bg", "bg_dark", "bg_deep", "bg_lift", "bg_tint", "bg_soft", "bg_warm",
                                        "accent_soft", "accent_dark")}
     t["accent"], t["text"] = rgb2hex(accent), rgb2hex(text)
+    t["frame_auto"] = frame_auto or "#111114"
     return t
 
 

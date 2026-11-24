@@ -1,0 +1,39 @@
+{
+  "name": "aura",
+  "dimension": "2d",
+  "theme": "light",
+  "best_for": [
+    "productivity",
+    "business",
+    "finance",
+    "utilities",
+    "education"
+  ],
+  "description": "2D · dark glowing opening slide, then light grey slides; dark headline on top, tagline at the bottom, soft glow around the phone.",
+  "design_notes": "Modern AI/productivity look. The first slide is dark with a coloured glow, the others light grey. Dark extra-bold headline at the top, a short tagline at the bottom, a soft coloured glow around the flat phone.",
+  "palette": {
+    "background": "#5B6CFF"
+  },
+  "bg_mode": "dark-then-light",
+  "defaults": {
+    "align": "center",
+    "title_scale": 1.0,
+    "title_weight": "ExtraBold",
+    "subtitle_bottom": true,
+    "frame": "black",
+    "glow": {
+      "color": "$accent",
+      "blur": 0.05,
+      "alpha": 0.5
+    }
+  },
+  "layouts": [
+    "flat",
+    "flat",
+    "flat",
+    "flat",
+    "flat",
+    "duo-flat",
+    "flat"
+  ]
+}

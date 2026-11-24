@@ -22,7 +22,7 @@ HERE = Path(__file__).resolve().parent
 IMG_EXT = {".png", ".jpg", ".jpeg", ".webp"}
 # copy dosyasında slayt başına değiştirilebilen alanlar; yol alan font/image gibi alanlar bilerek yok
 SLIDE_OVERRIDES = {"style", "frame", "text_position", "align", "bg_angle", "title_scale", "width", "perspective",
-                   "no_grain", "no_glow", "text_color", "accent", "glow", "deco", "frame_rim"}
+                   "no_grain", "no_glow", "text_color", "accent", "glow", "deco", "frame_rim", "callouts"}
 ASC_LOCALES = {"en": "en-US", "tr": "tr", "de": "de-DE", "fr": "fr-FR", "es": "es-ES", "it": "it", "pt": "pt-BR",
                "ja": "ja", "ko": "ko", "ru": "ru", "nl": "nl-NL", "ar": "ar-SA"}
 PLAY_LOCALES = {"en": "en-US", "tr": "tr-TR", "de": "de-DE", "fr": "fr-FR", "es": "es-ES", "it": "it-IT", "pt": "pt-BR",
@@ -535,7 +535,7 @@ def print_design(d: dict):
 # --------------------------------------------------------------------------- #
 # Render
 # --------------------------------------------------------------------------- #
-def slide_cfg(a, tpl, pal, idx, slide, shot_paths, names, warnings) -> dict:
+def slide_cfg(a, tpl, pal, idx, slide, shot_paths, names, warnings, prev_shot=None) -> dict:
     layouts = tpl.get("layouts") or ["flat"]
     st = P.slide_style(tpl, pal, idx, warnings)
     tokens = st.pop("tokens")
@@ -543,6 +543,8 @@ def slide_cfg(a, tpl, pal, idx, slide, shot_paths, names, warnings) -> dict:
     cfg.update(P.resolve_placeholders(tpl.get("defaults", {}), tokens))
     cfg.update(st)
     cfg["style"] = layouts[idx % len(layouts)]
+    if tpl.get("text_positions"):
+        cfg["text_position"] = tpl["text_positions"][idx % len(tpl["text_positions"])]
     if getattr(a, "theme", None):
         cfg["deco"] = [*cfg.get("deco", []), *TH.get(a.theme)["deco"]]
     if a.style:
@@ -572,6 +574,8 @@ def slide_cfg(a, tpl, pal, idx, slide, shot_paths, names, warnings) -> dict:
         raise SystemExit(f"Unknown style: {cfg['style']} ({', '.join(STYLES)})")
     shot = slide["shot"]
     cfg["image"] = str(shot_paths[shot])
+    if cfg["style"] == "pan-l" and prev_shot:  # the right half of the previous slide's phone
+        cfg["image"] = str(shot_paths[prev_shot])
     if cfg["style"] in ("duo", "duo-flat"):
         others = [n for n in names if n != shot]
         cfg["image2"] = str(shot_paths[others[idx % len(others)] if others else shot])
@@ -665,7 +669,7 @@ def cmd_render(a, data: dict | None = None):
             for idx, s in enumerate(slides[:limit]):
                 if only and (idx + 1) not in only:
                     continue
-                cfg = slide_cfg(ns, tpl, pal, idx, s, paths, names, warnings)
+                cfg = slide_cfg(ns, tpl, pal, idx, s, paths, names, warnings, slides[idx - 1]["shot"] if idx else None)
                 warnings += [(idx + 1, f"[{lang}] {m}") for m in text_problems(cfg, lang)]
                 fname = f"{idx + 1:02d}_{lang}.{'jpg' if a.format == 'jpg' else 'png'}"  # NN_<lang>, whatever the source file is called
                 store, target = store_dir(dev).parts

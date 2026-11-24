@@ -1,0 +1,46 @@
+{
+  "name": "noir",
+  "dimension": "2d",
+  "theme": "dark",
+  "best_for": [
+    "graphics",
+    "photo",
+    "lifestyle",
+    "entertainment",
+    "shopping"
+  ],
+  "description": "2D · deep warm-dark background with a vignette, light serif headline that alternates between top and bottom, large phone in a gold bezel.",
+  "design_notes": "Premium dark look. Deep brown-black background with a soft vignette. Light regular-weight serif headline, centred, alternating between the top and the bottom of the slide. The phone is large, front-facing, in a thin gold bezel and bleeds off the edge. Needs a system serif font such as Georgia; falls back to the bundled sans.",
+  "palette": {
+    "background": "#2A190F",
+    "accent": "#D9B26A"
+  },
+  "bg_mode": "dark-gradient",
+  "defaults": {
+    "align": "center",
+    "title_scale": 0.95,
+    "title_weight": "Regular",
+    "font": "serif",
+    "frame": "$accent",
+    "frame_rim": 0.012,
+    "vignette": 0.55
+  },
+  "text_positions": [
+    "top",
+    "bottom",
+    "top",
+    "bottom",
+    "top",
+    "bottom",
+    "top"
+  ],
+  "layouts": [
+    "peek-flat",
+    "flat",
+    "peek-flat",
+    "flat",
+    "peek-flat",
+    "flat",
+    "peek-flat"
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "name": "linen",
+  "dimension": "2d",
+  "theme": "light",
+  "best_for": [
+    "utilities",
+    "productivity",
+    "health",
+    "lifestyle",
+    "finance"
+  ],
+  "description": "2D · warm paper tone, dark brown headline, thin-bezel phone peeking up; some slides put the headline below the phone.",
+  "design_notes": "Calm, quiet look. A warm paper-like background, dark brown centred headline and a small subtitle, a phone with a thin dark bezel peeking up from the bottom edge; on some slides the headline moves below and the phone hangs from the top. No decoration.",
+  "palette": {
+    "background": "#B59B6E"
+  },
+  "bg_mode": "solid-light",
+  "defaults": {
+    "align": "center",
+    "title_scale": 0.98,
+    "title_weight": "Bold",
+    "frame": "$bg_deep",
+    "frame_rim": 0.006
+  },
+  "text_positions": [
+    "top",
+    "top",
+    "bottom",
+    "top",
+    "top",
+    "bottom",
+    "top"
+  ],
+  "layouts": [
+    "peek-flat",
+    "peek-flat",
+    "flat",
+    "peek-flat",
+    "peek-flat",
+    "flat",
+    "peek-flat"
+  ]
+}
