@@ -27,12 +27,13 @@ def test_tree_per_language(full):
     for lang in ("en", "tr"):
         assert sorted(p.name for p in (full / lang / "app-store" / "iphone-6.9").iterdir()) == [f"01_{lang}.png", f"02_{lang}.png"]
         assert sorted(p.name for p in (full / lang / "google-play" / "phone").iterdir()) == [f"01_{lang}.png", f"02_{lang}.png"]
-        assert sorted(p.name for p in (full / lang / "app-store" / "header-search").iterdir()) == [f"1920x1280_{lang}.png", f"5244x2950_{lang}.png"]
+        assert sorted(p.name for p in (full / lang / "app-store" / "header-search").iterdir()) == [f"5244x2950_{lang}.png"]
+        assert sorted(p.name for p in (full / lang / "app-store" / "search").iterdir()) == [f"1920x1280_{lang}.png"]
         assert (full / lang / "google-play" / "feature-graphic" / f"1024x500_{lang}.png").exists()
 
 
 def test_every_file_has_exact_size_and_no_alpha(full):
-    want = {"iphone-6.9": (1320, 2868), "phone": (1080, 1920), "header-search": None, "feature-graphic": (1024, 500)}
+    want = {"iphone-6.9": (1320, 2868), "phone": (1080, 1920), "header-search": None, "search": None, "header": None, "feature-graphic": (1024, 500)}
     for p in full.glob("*/*/*/*.png"):
         with Image.open(p) as im:
             size = want[p.parent.name] or tuple(map(int, p.stem.split("_")[0].split("x")))
@@ -73,7 +74,7 @@ def test_only_skips_zip_and_banners(full, tmp_path):
     (work / "c.json").write_text(json.dumps(d), encoding="utf-8")
     run("render", "--copy", work / "c.json", "--only", 1, "--langs", "en", "--jobs", 1, "-o", work)
     assert not (work / "manifest.json").exists() and not list(work.glob("*.zip"))
-    assert not (work / "en" / "app-store" / "header-search").exists()
+    assert not any((work / "en" / "app-store" / d).exists() for d in ("header", "search", "header-search"))
 
 
 def test_play_is_capped_at_eight_pages(shots_dir, tmp_path):
@@ -174,3 +175,20 @@ def test_preview_conversion_goes_to_language_folder(tmp_path):
     warnings = []
     files = cli.convert_previews(tmp_path / "o", {"*": str(src)}, ["en", "tr"], ["iphone-6.9"], warnings)
     assert not warnings and {Path(f).parts[-4] for f in files} == {"en", "tr"} and all(Path(f).exists() for f in files)
+
+
+@pytest.mark.parametrize("key", ["3840x1646", "3840x2560", "5244x2950"])
+@pytest.mark.parametrize("device", ["iphone-6.9", "ipad-13"])
+def test_header_and_search_keep_content_inside_apple_safe_area(tmp_path, key, device):
+    shot = tmp_path / "s.png"
+    Image.new("RGB", (400, 860), (255, 0, 0)).save(shot)
+    cfg = dict(banner=key, device=device, banner_device=device, bg="#000000,#000000", no_glow=True, frame="silver",
+               dimension="3d", image=str(shot), title="Hello there", subtitle="Sub", text_color="#ffffff", accent="#ffffff")
+    a = np.asarray(engine.render_banner(cfg, "en"))
+    h, w = a.shape[:2]
+    sw, sh = engine.BANNERS[key]["safe"]
+    x0, y0 = (w - sw) // 2, (h - sh) // 2
+    inside = np.zeros((h, w), bool)
+    inside[y0 - 3:y0 + sh + 3, x0 - 3:x0 + sw + 3] = True
+    assert a[~inside].max() < 40, "content leaked outside the art safe area"
+    assert a[inside].max() > 200

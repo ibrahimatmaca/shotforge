@@ -679,19 +679,24 @@ def cmd_render(a, data: dict | None = None):
                     path = out / lang / fname
                 jobs.append(dict(cfg=cfg, locale=lang, idx=idx, total=len(slides), path=str(path), fmt=a.format,
                                  meta=dict(store=store, target=target)))
-    for key in [] if only else banners:
+    tablet = next((d for d in devices if d.startswith("ipad")), None)  # iPad'li kullanıcıya iPad çerçeveli header/arama da verilir
+    variants = [(k, None) for k in banners] + [(k, tablet) for k in banners if tablet and BANNERS[k]["store"] == "app-store"]
+    for key, tab in [] if only else variants:
         b = BANNERS[key]
-        ns = argparse.Namespace(**{**vars(a), "device": b["device"]})
+        dev_name = tab or b["device"]
+        ns = argparse.Namespace(**{**vars(a), "device": dev_name})
         for lang in langs:
-            paths = shots_for(b["device"], lang, shot_paths, sets, notes)
+            paths = shots_for(dev_name, lang, shot_paths, sets, notes)
             cfg = slide_cfg(ns, tpl, pal, 0, slides[0], paths, names, warnings)
             for k, i in (("image", 0), ("image2", 1), ("image3", 2)):
                 cfg[k] = str(paths[slides[i % len(slides)]["shot"]])
             title, subtitle = banner_text(data, slides[0])
-            cfg.update(banner=key, dimension=tpl.get("dimension"), title=title, subtitle=subtitle, icon=icon)
-            path = out / lang / b["store"] / b["folder"] / f"{key}_{lang}.png"
+            cfg.update(banner=key, banner_device=dev_name, dimension=tpl.get("dimension"), title=title, subtitle=subtitle,
+                       icon=icon)
+            stem = f"{key}_ipad" if tab else key
+            path = out / lang / b["store"] / b["folder"] / f"{stem}_{lang}.png"
             if layout == "fastlane":
-                path = fastlane_banner(out, b, lang, key)
+                path = fastlane_banner(out, b, lang, stem)
             jobs.append(dict(cfg=cfg, locale=lang, idx=0, total=1, path=str(path), fmt="png",
                              meta=dict(store=b["store"], target=b["folder"], banner=key)))
     grouped: dict[str, list[int]] = {}

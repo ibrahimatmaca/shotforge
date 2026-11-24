@@ -11,6 +11,7 @@ from .engine import BANNERS, DEVICES
 
 STORES = ("appstore", "playstore")
 HEADER_SIZES = tuple(k for k, b in BANNERS.items() if b["store"] == "app-store")
+DEFAULT_HEADER_SIZES = ("3840x1646", "3840x2560")  # header (21:9) and search (3:2) are separate files; 5244x2950 is opt-in
 FEATURE_GRAPHIC = next(k for k, b in BANNERS.items() if b["store"] == "google-play")
 APPSTORE_DEVICES = ("iphone-6.9", "iphone-6.9b", "iphone-6.5", "ipad-13", "ipad-12.9")
 PLAY_DEVICES = ("android-phone", "android-tablet-7", "android-tablet-10")
@@ -45,8 +46,8 @@ QUESTIONS = [
     dict(id="store", question="Which store should the images be for?", kind="choice",
          options=["appstore", "playstore", "both"], default="both"),
     dict(id="header_sizes", question="Create App Store Header and Search Results images? In which sizes?",
-         kind="multi", options=[*HEADER_SIZES, "no"], default="all", when="store includes appstore",
-         note="5244x2950 (16:9, PNG) works for the header and search; 3840x2560 and 1920x1280 (3:2) only for search."),
+         kind="multi", options=["3840x1646", "3840x2560", "5244x2950", "no"], default="3840x1646,3840x2560", when="store includes appstore",
+         note="Default: 3840x1646 (header, 21:9) and 3840x2560 (search, 3:2), each laid out inside Apple's art safe area. 1920x1280 (smaller search size) is also accepted; 5244x2950 is the one-file universal asset (smallest safe area). With an iPad device, iPad-framed copies are added."),
     dict(id="langs", question="Which languages should the App Preview and screenshots use? You can choose several.",
          kind="multi", options=["en", "tr", "de", "fr"], default="en,tr",
          note="Other language codes work too (e.g. pt-BR). The font has no glyphs for ja, ko or ar; Arabic is not laid out right to left."),
@@ -105,7 +106,7 @@ def parse_stores(v) -> tuple[str, ...]:
 
 def parse_header_sizes(v) -> list[str]:
     if is_blank(v):
-        return list(HEADER_SIZES)
+        return list(DEFAULT_HEADER_SIZES)
     if isinstance(v, bool):
         return list(HEADER_SIZES) if v else []
     items = [i.lower().replace("×", "x").replace(" ", "") for i in _items(v)]

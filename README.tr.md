@@ -95,7 +95,7 @@ out/
   en/
     app-store/
       iphone-6.9/01_en.png …
-      header-search/5244x2950.png, 3840x2560.png, 1920x1280.png
+      header/3840x1646.png, search/3840x2560.png (+ _ipad copies with an iPad device)
       previews/iphone-6.9.mp4          # yalnızca --preview verilirse
     google-play/
       phone/01_en.png …

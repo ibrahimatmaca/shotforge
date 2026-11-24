@@ -29,7 +29,7 @@ def test_deliver_and_supply_tree(shots_dir, tmp_path):
     with Image.open(images / "featureGraphic.png") as im:
         assert im.size == (1024, 500)
     # başlık görselleri deliver klasörüne girmez
-    assert (out / "app-store-extra" / "en" / "header-search" / "1920x1280_en.png").exists()
+    assert (out / "app-store-extra" / "en" / "search" / "1920x1280_en.png").exists()
     assert not list(ios.rglob("1920x1280*"))
 
 

@@ -34,14 +34,18 @@ DEVICES = {
                               screen_aspect=16 / 10, island=False),
 }
 
-# Yatay mağaza görselleri. works_with yalnızca bilgi amaçlıdır; App Store Connect önizlemesiyle doğrulayın.
+# Yatay mağaza görselleri. safe = Apple'ın "art safe area" kutusu (px, tuvalin ortasında); kritik içerik (metin, cihazlar)
+# bunun içinde kalır, geri kalanı yalnızca arka plan. Değerler Apple'ın creative-assets-specifications sayfasından alındı;
+# App Store Connect önizlemesiyle doğrulayın.
 BANNERS = {
-    "5244x2950": dict(size=(5244, 2950), store="app-store", folder="header-search", device="iphone-6.9",
-                      crop_safe=True, works_with="App Store: product page header + search results (16:9, PNG)"),
-    "3840x2560": dict(size=(3840, 2560), store="app-store", folder="header-search", device="iphone-6.9",
+    "3840x1646": dict(size=(3840, 1646), store="app-store", folder="header", device="iphone-6.9", safe=(1646, 661),
+                      works_with="App Store: product page header only (21:9, PNG)"),
+    "3840x2560": dict(size=(3840, 2560), store="app-store", folder="search", device="iphone-6.9", safe=(2168, 1030),
                       works_with="App Store: search results only (3:2)"),
-    "1920x1280": dict(size=(1920, 1280), store="app-store", folder="header-search", device="iphone-6.9",
+    "1920x1280": dict(size=(1920, 1280), store="app-store", folder="search", device="iphone-6.9", safe=(1084, 515),
                       works_with="App Store: search results only (3:2)"),
+    "5244x2950": dict(size=(5244, 2950), store="app-store", folder="header-search", device="iphone-6.9", safe=(1402, 962),
+                      crop_safe=True, works_with="App Store: universal asset for header + search results (16:9, PNG)"),
     "1024x500": dict(size=(1024, 500), store="google-play", folder="feature-graphic", device="android-phone",
                      works_with="Google Play: feature graphic"),
 }
@@ -823,10 +827,11 @@ def render_slide(cfg: dict, locale: str | None, idx: int = 0, total: int = 1) ->
 
 
 def render_banner(cfg: dict, locale: str | None) -> Image.Image:
-    """Yatay mağaza görseli: solda ikon + metin, sağda 3 cihaz.
-    crop_safe: tek görsel hem 21:9 başlıkta hem 3:2 aramada kırpılarak gösterilir. Ortalanmış iki kırpmada da kalan alan
-    x %8–92, y %12–88'dir; içerik orada tutulur. Bu hesap Apple'ın şablonundaki güvenli alan değildir, önizlemeyle kontrol edin."""
-    W, H = BANNERS[cfg["banner"]]["size"]
+    """Yatay mağaza görseli: solda ikon + metin, sağda 3 cihaz (telefon ya da tablet).
+    Apple'lı bannerlarda ("safe" tanımlıysa) tüm içerik tuvalin ortasındaki art safe area içine yerleşir: header (21:9) ve
+    arama (3:2) ayrı oranlarda ayrı üretilir, böylece ikisi birbirini bozmaz. Google Play görselinde kenar boşluğu kullanılır."""
+    spec = BANNERS[cfg["banner"]]
+    W, H = spec["size"]
     ss = 1 if W * H > 8_000_000 else SS  # 5244x2950 x2 yaklaşık 250 MB eder
     cw, ch = W * ss, H * ss
     bg, lum = make_background((cw, ch), cfg["bg"], cfg.get("bg_angle"), glow=not cfg.get("no_glow"))
@@ -836,12 +841,24 @@ def render_banner(cfg: dict, locale: str | None) -> Image.Image:
     canvas = bg
 
     three_d = cfg.get("dimension") == "3d"
-    dev = DEVICES[cfg["device"]]
+    dev = DEVICES[cfg.get("banner_device") or cfg["device"]]
     colors = resolve_frame(cfg["frame"])
-    safe = BANNERS[cfg["banner"]].get("crop_safe")
-    top, bottom, cx, text_x, text_w = (0.13, 0.87, 0.70, 0.11, 0.36) if safe else (0.06, 0.94, 0.74, 0.09, 0.38)
-    main_w = min(0.24, (bottom - top) * H / W / 2.1)
+    if spec.get("safe"):
+        sw, sh = spec["safe"][0] * ss, spec["safe"][1] * ss
+        sx, sy = (cw - sw) / 2, (ch - sh) / 2
+    else:  # Google Play: kenarlardan küçük boşluk
+        sw, sh = cw * 0.88, ch * 0.88
+        sx, sy = cw * 0.06, ch * 0.06
+    gutter = sw * 0.04
+    text_w = sw * 0.38 if dev["kind"] == "phone" else sw * 0.34
+    art_x0 = sx + text_w + gutter  # cihazlar bu şeridin içinde
+    art_w = sx + sw - art_x0
+    # üç cihazın yan yana genişliği: orta 1, yanlar 0.82, ikisi 0.62 kayık
+    main_w = min(art_w * 0.94 / (1 + 2 * 0.62) / cw, 0.30)  # tuval oranı; %6 pay 3B yan açı için
     side_w, spread = main_w * 0.82, main_w * 0.62
+    cx = (art_x0 + art_w / 2) / cw
+    pad = sh * 0.04 if three_d else 0  # 3B döndürme köşeleri dışarı taşırır
+    region = (0, sy + pad, cw, sy + sh - pad)
     phones = [
         dict(key="image2", yaw=24 if three_d else 0, pitch=-4 if three_d else 0, roll=-4 if three_d else 0, width=side_w,
              mode="fit", cx=cx - spread),
@@ -849,26 +866,28 @@ def render_banner(cfg: dict, locale: str | None) -> Image.Image:
              mode="fit", cx=cx + spread),
         dict(key="image", yaw=0, pitch=0, roll=0, width=main_w, mode="fit", cx=cx),
     ]
-    region = (0, ch * top, cw, ch * bottom)
     for p in phones:
         shot = Image.open(cfg.get(p["key"]) or cfg["image"]).convert("RGB")
         # ortadaki cihazın ışıması yandakilerin üstüne binip onları soluklaştırır
         draw_phone(canvas, shot, dev, colors, p, region, persp=float(cfg.get("perspective", 3.0)),
                    glow=None if p["key"] == "image" else cfg.get("glow"), rim=float(cfg.get("frame_rim", 0.008)))
 
-    x0, col = cw * text_x, cw * text_w
     title, subtitle = pick_text(cfg.get("title"), locale), pick_text(cfg.get("subtitle"), locale)
-    tb = TextBlock(title, subtitle, col, ch, resolve_font(cfg.get("title_weight", "ExtraBold"), cfg.get("font")),
-                   resolve_font("Regular", cfg.get("font")), (*text_color, 255), accent, "left", 1.05, margin=0)
-    icon_h, icon_gap = 0, 0
-    if cfg.get("icon"):
-        icon_h, icon_gap = int(ch * 0.15), int(ch * 0.04)
-    y = (ch - (tb.height + icon_h + icon_gap)) / 2
+    fp_t, fp_s = resolve_font(cfg.get("title_weight", "ExtraBold"), cfg.get("font")), resolve_font("Regular", cfg.get("font"))
+    icon_h = int(sh * 0.17) if cfg.get("icon") else 0
+    icon_gap = int(sh * 0.05) if icon_h else 0
+    scale = 1.05 * float(cfg.get("title_scale", 1.0))
+    while True:  # metin güvenli alanın yüksekliğine sığana dek küçülür
+        tb = TextBlock(title, subtitle, text_w, ch, fp_t, fp_s, (*text_color, 255), accent, "left", scale, margin=0)
+        if tb.height + icon_h + icon_gap <= sh or scale < 0.3:
+            break
+        scale *= 0.92
+    y = sy + (sh - (tb.height + icon_h + icon_gap)) / 2
     if icon_h:
         icon = ImageOps.fit(Image.open(cfg["icon"]).convert("RGB"), (icon_h, icon_h), Image.LANCZOS)
-        canvas.paste(icon, (int(x0), int(y)), rr_mask((icon_h, icon_h), (0, 0, icon_h, icon_h), icon_h * 0.225))
+        canvas.paste(icon, (int(sx), int(y)), rr_mask((icon_h, icon_h), (0, 0, icon_h, icon_h), icon_h * 0.225))
         y += icon_h + icon_gap
-    tb.draw(canvas, y, dx=x0)
+    tb.draw(canvas, y, dx=sx)
     out = canvas.convert("RGB")
     return out.resize((W, H), Image.LANCZOS) if ss != 1 else out
 

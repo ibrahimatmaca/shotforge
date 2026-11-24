@@ -13,7 +13,7 @@ def test_blank_answers_become_defaults():
     r = I.resolve({})
     assert r["stores"] == ["appstore", "playstore"] and r["langs"] == ["en", "tr"]
     assert r["targets"] == dict(devices=["iphone-6.9", "android-phone"],
-                                banners=["5244x2950", "3840x2560", "1920x1280", "1024x500"], output="both")
+                                banners=["3840x1646", "3840x2560", "1024x500"], output="both")
     assert r["previews"] == {}
     assert I.resolve(dict(store="auto", header_sizes="", langs="otomatik", output=None))["targets"] == r["targets"]
 

@@ -97,7 +97,7 @@ out/
   en/
     app-store/
       iphone-6.9/01_en.png …
-      header-search/5244x2950.png, 3840x2560.png, 1920x1280.png
+      header/3840x1646.png, search/3840x2560.png (+ _ipad copies with an iPad device)
       previews/iphone-6.9.mp4          # only if you pass --preview
     google-play/
       phone/01_en.png …
@@ -117,7 +117,7 @@ Without `-o`, output goes to `./shotforge-out/<app>/`. Add `--sheet` for a singl
 |---|---|---|
 | Screenshots | `shotforge create <folder or files>` | required, asked again until given |
 | Store | `--store appstore\|playstore\|both` | both |
-| Header and Search Results images (App Store) | `--header-sizes 5244x2950,3840x2560,1920x1280\|no` | all three |
+| Header and Search Results images (App Store) | `--header-sizes 3840x1646,3840x2560,1920x1280,5244x2950\|no` | 3840x1646 header + 3840x2560 search |
 | Languages | `--langs en,tr,de` | en, tr |
 | 2D, 3D or a template | `--dimension`, `--template` | chosen by the rules |
 | Device sizes | `--devices iphone-6.9,ipad-13,android-phone,android-tablet-7,android-tablet-10` | iphone-6.9, android-phone |
@@ -136,7 +136,7 @@ Without `-o`, output goes to `./shotforge-out/<app>/`. Add `--sheet` for a singl
 **Store notes:**
 - Google Play takes up to 8 images per device type and at least 4 for tablets; extra pages are dropped with a warning.
 - Google's guidance recommends against device imagery, taglines over 20% of the image, and words like "Best" or "Free". It is a recommendation, not a requirement for phones and tablets, but it can affect where the listing is featured, so shotforge warns on every Play run.
-- Per third-party guides, 5244x2950 works for both the App Store header and search results (PNG only), while 3:2 sizes work for search results only. Check the crop in App Store Connect's preview; shotforge keeps text near the centre.
+- Header (3840x1646, 21:9) and search results (3840x2560, 3:2) are separate images, each laid out inside the art safe area from Apple's creative-assets specification (header 1646x661, search 2168x1030, universal 1402x962, centred). Verify the numbers and the crop in App Store Connect's preview. The 5244x2950 universal asset is opt-in and has a small safe area. With an iPad device, iPad-framed `_ipad` copies are also written.
 - App Preview needs ffmpeg and is App Store only; Google Play takes a YouTube link.
 
 ## Who decides what
@@ -451,7 +451,7 @@ Beta (v0.5). CI runs the test-suite on Linux with Python 3.10–3.14 on every pu
 - Device frames are generic modern-phone drawings, not Apple's official bezels. ~5–6 s per image.
 - Headlines: ≤ 3 lines, subtitles ≤ 2 lines; long text shrinks automatically, and text that still overflows is reported. Japanese, Korean, Chinese, Arabic and Hebrew text uses an installed system font that covers it (Hiragino, Apple SD Gothic Neo, PingFang, Geeza Pro, Noto…), because the bundled Inter font has none of these glyphs; shotforge warns when no installed font covers the text, and `--font` picks a font yourself. Hindi and Thai also need Pillow with Raqm for correct shaping. Screenshot analysis is a simple heuristic (a hint, not a verdict).
 - Tablet output crops a phone screenshot to the tablet ratio; supply real tablet screens. Android output reuses iOS screens unless you supply `android/`.
-- Arabic and Hebrew are shaped and right-aligned; check text that mixes in Latin words or numbers by hand. The App Store header-only 3840x1646 size is not generated.
+- Arabic and Hebrew are shaped and right-aligned; check text that mixes in Latin words or numbers by hand. 
 
 ## Development
 
