@@ -169,7 +169,7 @@ def get_intake_questions(shots: Optional[list[str]] = None, app: str = "", about
     return dict(
         questions=[q for q in I.QUESTIONS if q["id"] != "screenshots"], templates=_templates_info(), detected_shot_sets=sorted(sets),
         screenshot_defaults=dict(colors=P.default_colors(prof), ui=prof["ui"], template=name, dimension=dim, reasons=reasons),
-        output_layout="<out>/<lang>/app-store/{iphone-6.9,ipad-13,header-search,previews}/… and <out>/<lang>/google-play/"
+        output_layout="<out>/<lang>/app-store/{iphone-6.9,ipad-13,header,search,previews}/… and <out>/<lang>/google-play/"
                       "{phone,tablet-7,tablet-10,feature-graphic}/…, plus manifest.json and <app>.zip. layout='fastlane': "
                       "<out>/fastlane/screenshots/<locale>/… and <out>/fastlane/metadata/android/<locale>/images/…",
     )
@@ -346,7 +346,7 @@ async def create_screenshots(
     """Create store images: ONE SEPARATE IMAGE FILE per page per language, for every store target.
 
     intake_completed: set true only after asking the user the get_intake_questions questions. Blank answers are fine.
-    store: appstore | playstore | both (default both). header_sizes: 5244x2950, 3840x2560, 1920x1280 or ["no"] (default all).
+    store: appstore | playstore | both (default both). header_sizes: 3840x1646 (header), 3840x2560 / 1920x1280 (search), 5244x2950 (universal) or ["no"] (default 3840x1646 + 3840x2560; iPad devices add iPad-framed copies).
     devices: from DEVICES (default iphone-6.9, android-phone). previews: {"*": path} or {"tr": path} screen recordings.
     icon: app icon image for header/feature graphic. output: both | folder | zip (default both). A device argument draws
     one device only, with no store folders, header or zip.

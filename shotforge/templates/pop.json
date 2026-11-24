@@ -1,0 +1,34 @@
+{
+  "name": "pop",
+  "dimension": "2d",
+  "theme": "colorful",
+  "best_for": [
+    "food",
+    "lifestyle",
+    "shopping",
+    "social",
+    "education"
+  ],
+  "description": "2D · pale and saturated slides alternate, heavy centred headline, flat phone in a thick bezel that flips colour with the slide, some slides tilted in the plane.",
+  "design_notes": "Friendly consumer look. Slides alternate between a pale tint (headline in the brand colour, bezel in the brand colour) and the saturated brand colour (white headline, white bezel). Very heavy, large, centred headline; the phone is flat with a thick bezel and sometimes tilted a few degrees in the plane. No decoration.",
+  "palette": {
+    "background": "#F2551F"
+  },
+  "bg_mode": "alternate",
+  "defaults": {
+    "align": "center",
+    "title_scale": 1.08,
+    "title_weight": "ExtraBold",
+    "frame": "$frame_auto",
+    "frame_rim": 0.022
+  },
+  "layouts": [
+    "peek-flat",
+    "rotate-r",
+    "peek-flat",
+    "rotate-l",
+    "peek-flat",
+    "duo-flat",
+    "peek-flat"
+  ]
+}

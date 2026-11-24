@@ -22,7 +22,7 @@ HERE = Path(__file__).resolve().parent
 IMG_EXT = {".png", ".jpg", ".jpeg", ".webp"}
 # copy dosyasında slayt başına değiştirilebilen alanlar; yol alan font/image gibi alanlar bilerek yok
 SLIDE_OVERRIDES = {"style", "frame", "text_position", "align", "bg_angle", "title_scale", "width", "perspective",
-                   "no_grain", "no_glow", "text_color", "accent", "glow", "deco", "frame_rim"}
+                   "no_grain", "no_glow", "text_color", "accent", "glow", "deco", "frame_rim", "callouts"}
 ASC_LOCALES = {"en": "en-US", "tr": "tr", "de": "de-DE", "fr": "fr-FR", "es": "es-ES", "it": "it", "pt": "pt-BR",
                "ja": "ja", "ko": "ko", "ru": "ru", "nl": "nl-NL", "ar": "ar-SA"}
 PLAY_LOCALES = {"en": "en-US", "tr": "tr-TR", "de": "de-DE", "fr": "fr-FR", "es": "es-ES", "it": "it-IT", "pt": "pt-BR",
@@ -535,7 +535,7 @@ def print_design(d: dict):
 # --------------------------------------------------------------------------- #
 # Render
 # --------------------------------------------------------------------------- #
-def slide_cfg(a, tpl, pal, idx, slide, shot_paths, names, warnings) -> dict:
+def slide_cfg(a, tpl, pal, idx, slide, shot_paths, names, warnings, prev_shot=None) -> dict:
     layouts = tpl.get("layouts") or ["flat"]
     st = P.slide_style(tpl, pal, idx, warnings)
     tokens = st.pop("tokens")
@@ -543,6 +543,8 @@ def slide_cfg(a, tpl, pal, idx, slide, shot_paths, names, warnings) -> dict:
     cfg.update(P.resolve_placeholders(tpl.get("defaults", {}), tokens))
     cfg.update(st)
     cfg["style"] = layouts[idx % len(layouts)]
+    if tpl.get("text_positions"):
+        cfg["text_position"] = tpl["text_positions"][idx % len(tpl["text_positions"])]
     if getattr(a, "theme", None):
         cfg["deco"] = [*cfg.get("deco", []), *TH.get(a.theme)["deco"]]
     if a.style:
@@ -572,6 +574,8 @@ def slide_cfg(a, tpl, pal, idx, slide, shot_paths, names, warnings) -> dict:
         raise SystemExit(f"Unknown style: {cfg['style']} ({', '.join(STYLES)})")
     shot = slide["shot"]
     cfg["image"] = str(shot_paths[shot])
+    if cfg["style"] == "pan-l" and prev_shot:  # the right half of the previous slide's phone
+        cfg["image"] = str(shot_paths[prev_shot])
     if cfg["style"] in ("duo", "duo-flat"):
         others = [n for n in names if n != shot]
         cfg["image2"] = str(shot_paths[others[idx % len(others)] if others else shot])
@@ -665,7 +669,7 @@ def cmd_render(a, data: dict | None = None):
             for idx, s in enumerate(slides[:limit]):
                 if only and (idx + 1) not in only:
                     continue
-                cfg = slide_cfg(ns, tpl, pal, idx, s, paths, names, warnings)
+                cfg = slide_cfg(ns, tpl, pal, idx, s, paths, names, warnings, slides[idx - 1]["shot"] if idx else None)
                 warnings += [(idx + 1, f"[{lang}] {m}") for m in text_problems(cfg, lang)]
                 fname = f"{idx + 1:02d}_{lang}.{'jpg' if a.format == 'jpg' else 'png'}"  # NN_<lang>, whatever the source file is called
                 store, target = store_dir(dev).parts
@@ -679,19 +683,24 @@ def cmd_render(a, data: dict | None = None):
                     path = out / lang / fname
                 jobs.append(dict(cfg=cfg, locale=lang, idx=idx, total=len(slides), path=str(path), fmt=a.format,
                                  meta=dict(store=store, target=target)))
-    for key in [] if only else banners:
+    tablet = next((d for d in devices if d.startswith("ipad")), None)  # iPad'li kullanıcıya iPad çerçeveli header/arama da verilir
+    variants = [(k, None) for k in banners] + [(k, tablet) for k in banners if tablet and BANNERS[k]["store"] == "app-store"]
+    for key, tab in [] if only else variants:
         b = BANNERS[key]
-        ns = argparse.Namespace(**{**vars(a), "device": b["device"]})
+        dev_name = tab or b["device"]
+        ns = argparse.Namespace(**{**vars(a), "device": dev_name})
         for lang in langs:
-            paths = shots_for(b["device"], lang, shot_paths, sets, notes)
+            paths = shots_for(dev_name, lang, shot_paths, sets, notes)
             cfg = slide_cfg(ns, tpl, pal, 0, slides[0], paths, names, warnings)
             for k, i in (("image", 0), ("image2", 1), ("image3", 2)):
                 cfg[k] = str(paths[slides[i % len(slides)]["shot"]])
             title, subtitle = banner_text(data, slides[0])
-            cfg.update(banner=key, dimension=tpl.get("dimension"), title=title, subtitle=subtitle, icon=icon)
-            path = out / lang / b["store"] / b["folder"] / f"{key}_{lang}.png"
+            cfg.update(banner=key, banner_device=dev_name, dimension=tpl.get("dimension"), title=title, subtitle=subtitle,
+                       icon=icon)
+            stem = f"{key}_ipad" if tab else key
+            path = out / lang / b["store"] / b["folder"] / f"{stem}_{lang}.png"
             if layout == "fastlane":
-                path = fastlane_banner(out, b, lang, key)
+                path = fastlane_banner(out, b, lang, stem)
             jobs.append(dict(cfg=cfg, locale=lang, idx=0, total=1, path=str(path), fmt="png",
                              meta=dict(store=b["store"], target=b["folder"], banner=key)))
     grouped: dict[str, list[int]] = {}

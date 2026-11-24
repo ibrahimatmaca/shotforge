@@ -95,7 +95,7 @@ out/
   en/
     app-store/
       iphone-6.9/01_en.png …
-      header-search/5244x2950.png, 3840x2560.png, 1920x1280.png
+      header/3840x1646.png, search/3840x2560.png (+ _ipad copies with an iPad device)
       previews/iphone-6.9.mp4          # yalnızca --preview verilirse
     google-play/
       phone/01_en.png …
@@ -175,6 +175,12 @@ tr: Gününü *planla*                       (en eksik -> Claude yazar)
 | 2D | `slant` | dark | social, entertainment, productivity |
 | 3D | `classic` | colorful | entertainment, lifestyle, travel, shopping, social, photo |
 | 3D | `prism3d` | light | lifestyle, shopping, travel, photo, education, social |
+| 2D | `pop` | colorful | food, lifestyle, shopping, social, education (alternating pale/saturated, thick bezel) |
+| 2D | `editorial` | colorful | food, lifestyle, health, shopping, photo (serif + italic emphasis, phone runs across two slides; needs a system serif, else sans) |
+| 2D | `noir` | dark | graphics, photo, lifestyle, entertainment, shopping (warm dark, serif, gold bezel; needs a system serif, else sans) |
+| 2D | `blast` | colorful | utilities, music, games, entertainment, productivity (ALL-CAPS outlined headline, tagline at the bottom) |
+| 2D | `aura` | light | productivity, business, finance, utilities, education (dark glowing first slide, then light) |
+| 2D | `linen` | light | utilities, productivity, health, lifestyle, finance (warm paper tone, quiet) |
 | 3D | `neon3d` | dark | games, entertainment, photo, fitness, social |
 
 Otomatik seçim (`--template auto`; `shotforge rules`, `shotforge analyze ./ekranlar --category health`):

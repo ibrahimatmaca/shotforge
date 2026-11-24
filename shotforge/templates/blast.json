@@ -1,0 +1,43 @@
+{
+  "name": "blast",
+  "dimension": "2d",
+  "theme": "colorful",
+  "best_for": [
+    "utilities",
+    "music",
+    "games",
+    "entertainment",
+    "productivity"
+  ],
+  "description": "2D · flat bright colour with faint wave lines, huge outlined ALL-CAPS headline with a drop shadow, tagline at the bottom.",
+  "design_notes": "Loud utility-app look. A flat bright colour (yellow works best) with faint wave lines. Huge ALL-CAPS extra-bold headline with an outline and a drop shadow; short and punchy. And the subtitle sits as a tagline at the bottom.",
+  "palette": {
+    "background": "#FACC15",
+    "accent": "#111111"
+  },
+  "bg_mode": "solid",
+  "defaults": {
+    "align": "center",
+    "title_scale": 1.12,
+    "title_weight": "ExtraBold",
+    "uppercase": true,
+    "title_stroke": true,
+    "title_shadow": true,
+    "subtitle_bottom": true,
+    "frame": "black",
+    "bg_lines": {
+      "alpha": 0.12,
+      "count": 9,
+      "color": "#FFFFFF"
+    }
+  },
+  "layouts": [
+    "flat",
+    "flat",
+    "flat",
+    "flat",
+    "flat",
+    "duo-flat",
+    "flat"
+  ]
+}

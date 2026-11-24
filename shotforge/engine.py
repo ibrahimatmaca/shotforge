@@ -34,14 +34,18 @@ DEVICES = {
                               screen_aspect=16 / 10, island=False),
 }
 
-# Yatay mağaza görselleri. works_with yalnızca bilgi amaçlıdır; App Store Connect önizlemesiyle doğrulayın.
+# Yatay mağaza görselleri. safe = Apple'ın "art safe area" kutusu (px, tuvalin ortasında); kritik içerik (metin, cihazlar)
+# bunun içinde kalır, geri kalanı yalnızca arka plan. Değerler Apple'ın creative-assets-specifications sayfasından alındı;
+# App Store Connect önizlemesiyle doğrulayın.
 BANNERS = {
-    "5244x2950": dict(size=(5244, 2950), store="app-store", folder="header-search", device="iphone-6.9",
-                      crop_safe=True, works_with="App Store: product page header + search results (16:9, PNG)"),
-    "3840x2560": dict(size=(3840, 2560), store="app-store", folder="header-search", device="iphone-6.9",
+    "3840x1646": dict(size=(3840, 1646), store="app-store", folder="header", device="iphone-6.9", safe=(1646, 661),
+                      works_with="App Store: product page header only (21:9, PNG)"),
+    "3840x2560": dict(size=(3840, 2560), store="app-store", folder="search", device="iphone-6.9", safe=(2168, 1030),
                       works_with="App Store: search results only (3:2)"),
-    "1920x1280": dict(size=(1920, 1280), store="app-store", folder="header-search", device="iphone-6.9",
+    "1920x1280": dict(size=(1920, 1280), store="app-store", folder="search", device="iphone-6.9", safe=(1084, 515),
                       works_with="App Store: search results only (3:2)"),
+    "5244x2950": dict(size=(5244, 2950), store="app-store", folder="header-search", device="iphone-6.9", safe=(1402, 962),
+                      crop_safe=True, works_with="App Store: universal asset for header + search results (16:9, PNG)"),
     "1024x500": dict(size=(1024, 500), store="google-play", folder="feature-graphic", device="android-phone",
                      works_with="Google Play: feature graphic"),
 }
@@ -81,6 +85,9 @@ STYLES = {
     "peek-flat": dict(phones=[dict(yaw=0, pitch=0, roll=0, width=0.86, mode="top", dy=0.0)]),
     "rotate-l": dict(phones=[dict(yaw=0, pitch=0, roll=-14, width=0.98, mode="top", cx=0.60, dy=0.0)]),
     "rotate-r": dict(phones=[dict(yaw=0, pitch=0, roll=14, width=0.98, mode="top", cx=0.40, dy=0.0)]),
+    # panorama: the same phone is cut by the slide edge; pan-r on slide N and pan-l on slide N+1 (same screenshot) join up
+    "pan-r": dict(phones=[dict(yaw=0, pitch=0, roll=0, width=0.92, mode="top", cx=1.0, ytop=0.30)]),
+    "pan-l": dict(phones=[dict(yaw=0, pitch=0, roll=0, width=0.92, mode="top", cx=0.0, ytop=0.30)]),
     "duo-flat": dict(phones=[
         dict(yaw=0, pitch=0, roll=0, width=0.56, mode="fit", cx=0.31, dy=0.07, second=True),
         dict(yaw=0, pitch=0, roll=0, width=0.60, mode="fit", cx=0.68, dy=0.0),
@@ -187,9 +194,19 @@ def add_grain(img: Image.Image, strength=1.6, seed=7) -> Image.Image:
 # --------------------------------------------------------------------------- #
 # Yazı
 # --------------------------------------------------------------------------- #
+SERIF_FONTS = {  # "font": "serif" in a template; ships no font of its own, falls back to Inter when none is installed
+    True: ["/System/Library/Fonts/Supplemental/Georgia Bold.ttf", "C:/Windows/Fonts/georgiab.ttf",
+           "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"],
+    False: ["/System/Library/Fonts/Supplemental/Georgia.ttf", "C:/Windows/Fonts/georgia.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"],
+}
+
+
 def resolve_font(weight: str, user_font: str | None) -> str:
     cands = []
-    if user_font:
+    if user_font == "serif":
+        cands += [Path(p) for p in SERIF_FONTS[weight in ("Bold", "ExtraBold", "SemiBold")]]
+    elif user_font:
         cands.append(Path(user_font))
     cands += [HERE / "fonts" / f"Inter-{weight}.otf", HERE / "fonts" / f"Inter-{weight}.ttf"]
     cands += [Path(p) for p in (
@@ -200,6 +217,17 @@ def resolve_font(weight: str, user_font: str | None) -> str:
         if c.exists():
             return str(c)
     raise SystemExit("No font found. Pass a .ttf/.otf path with --font.")
+
+
+def italic_of(path: str) -> str | None:
+    """Matching italic face for a serif path chosen by resolve_font; None when there is none."""
+    p = Path(path)
+    for a, b in (("Georgia Bold.ttf", "Georgia Bold Italic.ttf"), ("Georgia.ttf", "Georgia Italic.ttf"),
+                 ("georgiab.ttf", "georgiaz.ttf"), ("georgia.ttf", "georgiai.ttf"),
+                 ("DejaVuSerif-Bold.ttf", "DejaVuSerif-BoldItalic.ttf"), ("DejaVuSerif.ttf", "DejaVuSerif-Italic.ttf")):
+        if p.name == a and (p.parent / b).exists():
+            return str(p.parent / b)
+    return None
 
 
 def parse_markup(text: str):
@@ -219,7 +247,7 @@ def parse_markup(text: str):
     return paras
 
 
-def wrap(paras, font, max_w, rtl=False):
+def wrap(paras, font, max_w, rtl=False, font_acc=None):
     """Satırlar: [([(kelime, vurgu, genişlik, bitişik), ...], genişlik), ...]. Bitişik parçalar satır sonunda ayrılmaz.
     CJK metinde satır karakterler arasında kırılır; bitişik=True olan parça öncesinde boşluk bırakılmaz."""
     space = font.getlength(" ")
@@ -228,7 +256,7 @@ def wrap(paras, font, max_w, rtl=False):
         units: list[list] = []  # [parçalar, öncesinde boşluk yok mu]
         for w, acc, glued in words:
             for k, piece in enumerate(scripts.split_breaks(w)):
-                width = font.getlength(scripts.shape(piece, rtl))
+                width = (font_acc if acc and font_acc else font).getlength(scripts.shape(piece, rtl))
                 if k == 0 and glued and units:
                     units[-1][0].append((piece, acc, width, True))
                 else:
@@ -249,37 +277,42 @@ def wrap(paras, font, max_w, rtl=False):
 
 class TextBlock:
     def __init__(self, title, subtitle, W, H, fp_title, fp_sub, color, accent, align="center",
-                 title_scale=1.0, margin=0.075):
+                 title_scale=1.0, margin=0.075, accent_style="color", stroke=None, shadow=False, deco_all=False):
         self.W, self.H, self.align = W, H, align
+        self.accent_style, self.stroke, self.shadow, self.deco_all = accent_style, stroke, shadow, deco_all
         self.color, self.accent = color, accent
         self.margin = int(W * margin)
         max_w = W - 2 * self.margin
         self.parts = []
         if title:
             self.parts.append(self._fit(title, fp_title, int(W * 0.098 * title_scale), int(W * 0.050), max_w, 3, 1.10, color, 0,
-                                        bold=True))
+                                        bold=True, title=True))
         if subtitle:
             sub_col = (*color[:3], 205)
             self.parts.append(self._fit(subtitle, fp_sub, int(W * 0.043), int(W * 0.028), max_w, 2, 1.32,
-                                        sub_col, int(W * 0.028) if title else 0, accent_ok=False))
+                                        sub_col, int(W * 0.028) if title else 0, accent_ok=False,
+                                        title=deco_all and not title))
         self.height = sum(p["gap"] + len(p["lines"]) * p["line_h"] for p in self.parts)
         self.title_h = (self.parts[0]["gap"] + len(self.parts[0]["lines"]) * self.parts[0]["line_h"]) if title else 0
         self.title_w = max((w for _, w in self.parts[0]["lines"]), default=0) if title else 0
 
-    def _fit(self, text, path, start, minimum, max_w, max_lines, lh, color, gap, accent_ok=True, bold=False):
+    def _fit(self, text, path, start, minimum, max_w, max_lines, lh, color, gap, accent_ok=True, bold=False, title=False):
         paras = parse_markup(text)
         rtl = scripts.is_rtl(text)
+        orig = path
         path, index, _ = scripts.choose_font(text, path, bold, rtl)  # Inter has no CJK/Arabic glyphs
+        ipath = italic_of(path) if (title and self.accent_style == "italic" and path == orig and not rtl) else None
         size = max(start, minimum)
         while True:
             font = scripts.load(path, index, size, rtl)
-            lines, space = wrap(paras, font, max_w, rtl)
+            font_acc = scripts.load(ipath, 0, size) if ipath else None
+            lines, space = wrap(paras, font, max_w, rtl, font_acc)
             fits = len(lines) <= max_lines and all(w <= max_w for _, w in lines)
             if fits or size <= minimum:
                 break
             size = int(size * 0.96)
         return dict(lines=lines, font=font, space=space, line_h=size * lh, color=color, gap=gap, size=size,
-                    accent_ok=accent_ok, rtl=rtl)
+                    accent_ok=accent_ok, rtl=rtl, font_acc=font_acc, title=title)
 
     def draw(self, canvas: Image.Image, top: float, dx: float = 0):
         d = ImageDraw.Draw(canvas, "RGBA")
@@ -296,10 +329,17 @@ class TextBlock:
                     x += width
                 for i, (w, acc, ww, glued) in enumerate(words):
                     gap_w = p["space"] if i and not glued else 0
-                    fill = (*self.accent, 255) if (acc and p["accent_ok"]) else p["color"]
+                    fill = (*self.accent, 255) if (acc and p["accent_ok"] and self.accent_style != "italic") else p["color"]
+                    fnt = p["font_acc"] if (acc and p["accent_ok"] and p.get("font_acc")) else p["font"]
                     x += -gap_w - ww if rtl else gap_w
-                    d.text((x, y + asc + (p["line_h"] - p["size"]) / 2 * 0.6), scripts.shape(w, rtl), font=p["font"], fill=fill,
-                           anchor="ls")
+                    pos = (x, y + asc + (p["line_h"] - p["size"]) / 2 * 0.6)
+                    if p["title"] and self.shadow:
+                        off = max(2, int(p["size"] * 0.045))
+                        d.text((pos[0] + off, pos[1] + off), scripts.shape(w, rtl), font=fnt, fill=(0, 0, 0, 90), anchor="ls",
+                               stroke_width=int(self.stroke[1]) if self.stroke else 0, stroke_fill=(0, 0, 0, 90))
+                    d.text(pos, scripts.shape(w, rtl), font=fnt, fill=fill, anchor="ls",
+                           **(dict(stroke_width=int(self.stroke[1]), stroke_fill=(*self.stroke[0], 255))
+                              if (self.stroke and p["title"]) else {}))
                     x += 0 if rtl else ww
                 y += p["line_h"]
 
@@ -434,7 +474,7 @@ def draw_phone(canvas, shot, dev, colors, p, region, persp=3.0, depth=0.085, glo
     else:
         k = target_w / bw_u
         cx = p.get("cx", 0.5) * CW
-        ox, oy = cx - k * (x0 + x1) / 2, ry0 - k * y0
+        ox, oy = cx - k * (x0 + x1) / 2, (p["ytop"] * CH if "ytop" in p else ry0) - k * y0
 
     def to_canvas(pts2):
         return pts2 * k + np.array([ox, oy])
@@ -685,6 +725,64 @@ def deco_sticker(canvas, item, idx, ctx):
 # --------------------------------------------------------------------------- #
 # Slayt üretimi
 # --------------------------------------------------------------------------- #
+def bg_vignette(canvas: Image.Image, strength: float):
+    """Darkens the edges; the mask is built small and scaled up to keep memory low."""
+    cw, ch = canvas.size
+    sw, sh = max(cw // 8, 32), max(ch // 8, 32)
+    yy, xx = np.mgrid[0:sh, 0:sw].astype(np.float32)
+    r = np.sqrt(((xx / (sw - 1) - 0.5) * 1.25) ** 2 + (yy / (sh - 1) - 0.5) ** 2)
+    a = np.clip((r - 0.28) / 0.55, 0, 1) ** 1.6 * strength * 255
+    mask = Image.fromarray(a.astype(np.uint8), "L").resize((cw, ch), Image.BICUBIC)
+    shade = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+    shade.putalpha(mask)
+    canvas.alpha_composite(shade)
+
+
+def bg_lines(canvas: Image.Image, item: dict, idx: int):
+    """Faint horizontal sound-wave lines; drawn with global x so they continue across slides."""
+    cw, ch = canvas.size
+    col = _color(item.get("color"), (255, 255, 255))
+    n = int(item.get("count", 9))
+    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    th = max(2, int(cw * 0.0035))
+    for i in range(n):
+        y0 = ch * (0.10 + 0.80 * i / max(1, n - 1))
+        amp = ch * 0.012 * (1 + (i % 3))
+        pts = [(x, y0 + amp * math.sin((idx * cw + x) / cw * (2 * math.pi) * (1.2 + 0.25 * (i % 4)) + i)) for x in range(0, cw + 1, 6)]
+        d.line(pts, fill=(*col, int(255 * float(item.get("alpha", 0.12)))), width=th, joint="curve")
+    canvas.alpha_composite(layer)
+
+
+def deco_callout(canvas: Image.Image, shot: Image.Image, item: dict, idx: int, region):
+    """A band of the user's own screenshot, enlarged and floated over the phone edge (Apple: overlays that highlight
+    specific functionality). Default band is the upper-middle of the screen; override with band=[top, bottom] (0-1)."""
+    CW, CH = canvas.size
+    sw, sh = shot.size
+    if item.get("band"):
+        b0, b1 = item["band"]
+    else:  # lower-middle of the screen is usually list rows or cards; set band per slide for anything else
+        b0, b1 = 0.54, 0.65
+    crop = shot.crop((int(sw * 0.05), int(sh * b0), int(sw * 0.95), int(sh * b1)))
+    width = int(CW * float(item.get("width", 0.62)))
+    height = int(crop.height * width / crop.width)
+    card = crop.resize((width, height), Image.LANCZOS).convert("RGBA")
+    radius = max(8, int(CW * 0.026))
+    mask = rr_mask((width, height), (0, 0, width, height), radius)
+    side = item.get("side") or ("left" if idx % 2 == 0 else "right")
+    x = int(CW * 0.035) if side == "left" else int(CW - width - CW * 0.035)
+    y = int(region[1] + (region[3] - region[1]) * float(item.get("y", 0.55)))
+    shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    sm = Image.new("L", canvas.size, 0)
+    sm.paste(mask.point(lambda v: int(v * 0.55)), (x, y + int(CW * 0.012)))
+    shadow.putalpha(sm.filter(ImageFilter.GaussianBlur(CW * 0.018)))
+    canvas.alpha_composite(shadow)
+    card.putalpha(mask)
+    canvas.alpha_composite(card, (x, y))
+    ImageDraw.Draw(canvas).rounded_rectangle((x, y, x + width - 1, y + height - 1), radius=radius,
+                                             outline=(255, 255, 255, 120), width=max(1, SS))
+
+
 def pick_text(v, locale):
     if v is None:
         return ""
@@ -716,6 +814,8 @@ def text_problems(cfg: dict, locale: str | None) -> list[str]:
     W, H = DEVICES[cfg["device"]]["size"]
     cw, ch = W * SS, H * SS
     title, subtitle = pick_text(cfg.get("title"), locale), pick_text(cfg.get("subtitle"), locale)
+    if cfg.get("uppercase") and title:
+        title = title.upper()
     fp_t = resolve_font(cfg.get("title_weight", "ExtraBold"), cfg.get("font"))
     fp_s = resolve_font("Regular", cfg.get("font"))
     problems = []
@@ -761,20 +861,34 @@ def render_slide(cfg: dict, locale: str | None, idx: int = 0, total: int = 1) ->
     accent = hex2rgb(cfg["accent"]) if cfg.get("accent") else ((253, 224, 71) if dark_bg else (124, 58, 237))
     canvas = bg
     deco = cfg.get("deco") or []
+    if cfg.get("vignette"):
+        bg_vignette(canvas, float(cfg["vignette"]))
+    if cfg.get("bg_lines"):
+        bg_lines(canvas, cfg["bg_lines"] if isinstance(cfg["bg_lines"], dict) else {}, idx)
 
     title, subtitle = pick_text(cfg.get("title"), locale), pick_text(cfg.get("subtitle"), locale)
+    if cfg.get("uppercase") and title:
+        title = title.upper()
     fp_t = resolve_font(cfg.get("title_weight", "ExtraBold"), cfg.get("font"))
     fp_s = resolve_font("Regular", cfg.get("font"))
-    tb = TextBlock(title, subtitle, cw, ch, fp_t, fp_s, (*text_color, 255), accent,
-                   cfg.get("align", "center"), float(cfg.get("title_scale", 1.0)))
+    stroke = None
+    if cfg.get("title_stroke"):  # outline in the opposite tone of the text, for loud poster-style headlines
+        stroke = ((255, 255, 255) if luminance(text_color) < 0.5 else (0, 0, 0), max(2, int(cw * 0.003)))
+    look = dict(accent_style=cfg.get("accent_style", "color"), stroke=stroke, shadow=bool(cfg.get("title_shadow")))
+    sub_bottom = bool(cfg.get("subtitle_bottom") and subtitle and title)
+    tb = TextBlock(title, None if sub_bottom else subtitle, cw, ch, fp_t, fp_s, (*text_color, 255), accent,
+                   cfg.get("align", "center"), float(cfg.get("title_scale", 1.0)), **look)
+    tb2 = TextBlock(None, subtitle, cw, ch, fp_t, fp_s, (*text_color, 255), accent, cfg.get("align", "center"),
+                    float(cfg.get("title_scale", 1.0)), deco_all=True, **look) if sub_bottom else None
     top_margin, gap = ch * 0.060, ch * 0.030
+    low = (tb2.height + ch * 0.035 + gap) if tb2 else ch * 0.035  # space kept for a bottom tagline
     pos = cfg.get("text_position", "top")
     style = cfg["style"]
     if pos == "bottom":  # peek telefonu alta taşırır; aynı boyutta (2D/3D) kalan düzene geç
         style = {"peek": "tilt-right", "peek-flat": "flat"}.get(style, style)
     if pos == "top":
         text_y = top_margin
-        region = (0, text_y + tb.height + gap, cw, ch - ch * 0.035)
+        region = (0, text_y + tb.height + gap, cw, ch - low)
     else:
         text_y = ch - top_margin - tb.height
         region = (0, ch * 0.035, cw, text_y - gap)
@@ -809,7 +923,11 @@ def render_slide(cfg: dict, locale: str | None, idx: int = 0, total: int = 1) ->
     for it in deco:  # çıkartmalar parçacıkların da önünde
         if it["type"] == "sticker":
             deco_sticker(canvas, it, idx, ctx)
+    if cfg.get("callouts") and not style.startswith(("duo", "pan")):
+        deco_callout(canvas, shot, cfg["callouts"][0], idx, region)
     tb.draw(canvas, text_y)
+    if tb2:
+        tb2.draw(canvas, ch - ch * 0.035 - tb2.height)
     for it in deco:  # metnin üstüne gelenler
         if it["type"] == "squiggle" and title:
             deco_squiggle(canvas, it, ctx)
@@ -823,10 +941,11 @@ def render_slide(cfg: dict, locale: str | None, idx: int = 0, total: int = 1) ->
 
 
 def render_banner(cfg: dict, locale: str | None) -> Image.Image:
-    """Yatay mağaza görseli: solda ikon + metin, sağda 3 cihaz.
-    crop_safe: tek görsel hem 21:9 başlıkta hem 3:2 aramada kırpılarak gösterilir. Ortalanmış iki kırpmada da kalan alan
-    x %8–92, y %12–88'dir; içerik orada tutulur. Bu hesap Apple'ın şablonundaki güvenli alan değildir, önizlemeyle kontrol edin."""
-    W, H = BANNERS[cfg["banner"]]["size"]
+    """Yatay mağaza görseli: solda ikon + metin, sağda 3 cihaz (telefon ya da tablet).
+    Apple'lı bannerlarda ("safe" tanımlıysa) tüm içerik tuvalin ortasındaki art safe area içine yerleşir: header (21:9) ve
+    arama (3:2) ayrı oranlarda ayrı üretilir, böylece ikisi birbirini bozmaz. Google Play görselinde kenar boşluğu kullanılır."""
+    spec = BANNERS[cfg["banner"]]
+    W, H = spec["size"]
     ss = 1 if W * H > 8_000_000 else SS  # 5244x2950 x2 yaklaşık 250 MB eder
     cw, ch = W * ss, H * ss
     bg, lum = make_background((cw, ch), cfg["bg"], cfg.get("bg_angle"), glow=not cfg.get("no_glow"))
@@ -836,12 +955,24 @@ def render_banner(cfg: dict, locale: str | None) -> Image.Image:
     canvas = bg
 
     three_d = cfg.get("dimension") == "3d"
-    dev = DEVICES[cfg["device"]]
+    dev = DEVICES[cfg.get("banner_device") or cfg["device"]]
     colors = resolve_frame(cfg["frame"])
-    safe = BANNERS[cfg["banner"]].get("crop_safe")
-    top, bottom, cx, text_x, text_w = (0.13, 0.87, 0.70, 0.11, 0.36) if safe else (0.06, 0.94, 0.74, 0.09, 0.38)
-    main_w = min(0.24, (bottom - top) * H / W / 2.1)
+    if spec.get("safe"):
+        sw, sh = spec["safe"][0] * ss, spec["safe"][1] * ss
+        sx, sy = (cw - sw) / 2, (ch - sh) / 2
+    else:  # Google Play: kenarlardan küçük boşluk
+        sw, sh = cw * 0.88, ch * 0.88
+        sx, sy = cw * 0.06, ch * 0.06
+    gutter = sw * 0.04
+    text_w = sw * 0.38 if dev["kind"] == "phone" else sw * 0.34
+    art_x0 = sx + text_w + gutter  # cihazlar bu şeridin içinde
+    art_w = sx + sw - art_x0
+    # üç cihazın yan yana genişliği: orta 1, yanlar 0.82, ikisi 0.62 kayık
+    main_w = min(art_w * 0.94 / (1 + 2 * 0.62) / cw, 0.30)  # tuval oranı; %6 pay 3B yan açı için
     side_w, spread = main_w * 0.82, main_w * 0.62
+    cx = (art_x0 + art_w / 2) / cw
+    pad = sh * 0.04 if three_d else 0  # 3B döndürme köşeleri dışarı taşırır
+    region = (0, sy + pad, cw, sy + sh - pad)
     phones = [
         dict(key="image2", yaw=24 if three_d else 0, pitch=-4 if three_d else 0, roll=-4 if three_d else 0, width=side_w,
              mode="fit", cx=cx - spread),
@@ -849,26 +980,28 @@ def render_banner(cfg: dict, locale: str | None) -> Image.Image:
              mode="fit", cx=cx + spread),
         dict(key="image", yaw=0, pitch=0, roll=0, width=main_w, mode="fit", cx=cx),
     ]
-    region = (0, ch * top, cw, ch * bottom)
     for p in phones:
         shot = Image.open(cfg.get(p["key"]) or cfg["image"]).convert("RGB")
         # ortadaki cihazın ışıması yandakilerin üstüne binip onları soluklaştırır
         draw_phone(canvas, shot, dev, colors, p, region, persp=float(cfg.get("perspective", 3.0)),
                    glow=None if p["key"] == "image" else cfg.get("glow"), rim=float(cfg.get("frame_rim", 0.008)))
 
-    x0, col = cw * text_x, cw * text_w
     title, subtitle = pick_text(cfg.get("title"), locale), pick_text(cfg.get("subtitle"), locale)
-    tb = TextBlock(title, subtitle, col, ch, resolve_font(cfg.get("title_weight", "ExtraBold"), cfg.get("font")),
-                   resolve_font("Regular", cfg.get("font")), (*text_color, 255), accent, "left", 1.05, margin=0)
-    icon_h, icon_gap = 0, 0
-    if cfg.get("icon"):
-        icon_h, icon_gap = int(ch * 0.15), int(ch * 0.04)
-    y = (ch - (tb.height + icon_h + icon_gap)) / 2
+    fp_t, fp_s = resolve_font(cfg.get("title_weight", "ExtraBold"), cfg.get("font")), resolve_font("Regular", cfg.get("font"))
+    icon_h = int(sh * 0.17) if cfg.get("icon") else 0
+    icon_gap = int(sh * 0.05) if icon_h else 0
+    scale = 1.05 * float(cfg.get("title_scale", 1.0))
+    while True:  # metin güvenli alanın yüksekliğine sığana dek küçülür
+        tb = TextBlock(title, subtitle, text_w, ch, fp_t, fp_s, (*text_color, 255), accent, "left", scale, margin=0)
+        if tb.height + icon_h + icon_gap <= sh or scale < 0.3:
+            break
+        scale *= 0.92
+    y = sy + (sh - (tb.height + icon_h + icon_gap)) / 2
     if icon_h:
         icon = ImageOps.fit(Image.open(cfg["icon"]).convert("RGB"), (icon_h, icon_h), Image.LANCZOS)
-        canvas.paste(icon, (int(x0), int(y)), rr_mask((icon_h, icon_h), (0, 0, icon_h, icon_h), icon_h * 0.225))
+        canvas.paste(icon, (int(sx), int(y)), rr_mask((icon_h, icon_h), (0, 0, icon_h, icon_h), icon_h * 0.225))
         y += icon_h + icon_gap
-    tb.draw(canvas, y, dx=x0)
+    tb.draw(canvas, y, dx=sx)
     out = canvas.convert("RGB")
     return out.resize((W, H), Image.LANCZOS) if ss != 1 else out
 
