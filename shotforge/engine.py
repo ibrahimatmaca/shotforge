@@ -693,6 +693,24 @@ def pick_text(v, locale):
     return str(v)
 
 
+# Apple "Asset best practices": no price/discount, URL, copyright symbol, awards, Apple recognitions or other platforms.
+_APPLE_RULES = [
+    (r"[$€£₺¥]\s?\d|\d\s?[$€£₺¥]|\b\d{1,3}\s?%\s*(off|discount|indirim)|\b(discount|sale|free trial|indirim)\b",
+     "specific pricing or discounts"),
+    (r"https?://|www\.|\b[a-z0-9-]+\.(com|net|org|io|app)\b", "website URLs"),
+    (r"[©®™]|\(c\)|copyright", "copyright or trademark symbols"),
+    (r"editor.?s choice|app of the day|game of the day|apple design award|apple.?s? (best|pick)", "Apple-designated recognitions"),
+    (r"\b(award[- ]winning|#\s?1|no\.\s?1|number one|best app|en iyi uygulama)\b", "unverifiable claims (awards, rankings)"),
+    (r"google play|play store|android|\bsamsung\b|microsoft store|amazon appstore", "other platforms or marketplaces"),
+]
+
+
+def apple_content_problems(text: str) -> list[str]:
+    """App Store images must not carry the content Apple's asset guidance rules out. Returns what was found."""
+    low = (text or "").lower()
+    return [label for rx, label in _APPLE_RULES if re.search(rx, low)]
+
+
 def text_problems(cfg: dict, locale: str | None) -> list[str]:
     """Çizimden önce: fontta olmayan karakterler ve en küçük boyutta bile sığmayan metin."""
     W, H = DEVICES[cfg["device"]]["size"]
@@ -701,6 +719,10 @@ def text_problems(cfg: dict, locale: str | None) -> list[str]:
     fp_t = resolve_font(cfg.get("title_weight", "ExtraBold"), cfg.get("font"))
     fp_s = resolve_font("Regular", cfg.get("font"))
     problems = []
+    if not cfg["device"].startswith("android"):
+        found = apple_content_problems(f"{title} {subtitle}")
+        if found:
+            problems.append("App Store guidance rules out " + ", ".join(found) + " in screenshots; reword it before you submit.")
     missing = set()
     for text, path, bold in ((title, fp_t, True), (subtitle, fp_s, False)):
         missing |= set(scripts.choose_font(text, path, bold, scripts.is_rtl(text))[2])

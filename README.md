@@ -12,7 +12,17 @@ one combined image.
 
 *Türkçe okumak için: [README.tr.md](README.tr.md)*
 
-![2D and 3D templates](examples/output/compare_2d_vs_3d.jpg)
+![Holiday-themed App Store screenshots made with shotforge: 3D phone, accent headlines, snow and stickers](examples/output/showcase_hero.jpg)
+
+Holiday theme (`--theme holidays`), 3D template, 7 pages, one image per page:
+
+<img src="examples/output/showcase/01.jpg" width="13%" alt="Store screenshot 1 of 7">
+<img src="examples/output/showcase/02.jpg" width="13%" alt="Store screenshot 2 of 7">
+<img src="examples/output/showcase/03.jpg" width="13%" alt="Store screenshot 3 of 7">
+<img src="examples/output/showcase/04.jpg" width="13%" alt="Store screenshot 4 of 7">
+<img src="examples/output/showcase/05.jpg" width="13%" alt="Store screenshot 5 of 7">
+<img src="examples/output/showcase/06.jpg" width="13%" alt="Store screenshot 6 of 7">
+<img src="examples/output/showcase/07.jpg" width="13%" alt="Store screenshot 7 of 7">
 
 ## Features
 
@@ -216,6 +226,7 @@ Claude Desktop / Cursor / any MCP client (`claude_desktop_config.json` or the cl
 | `create_screenshots` | takes Claude's/your decisions (`slides`, colours, template/dimension, `langs`, `count`, `only`, `layout`, …) and writes separate images; returns paths + overview image |
 | `render_screenshots` | redraw from `shotforge.copy.json` after edits, optionally with another template/colours |
 | `convert_app_preview` | screen recording → App Store app-preview spec (ffmpeg) |
+| `slideshow_app_preview` | real app screenshots → App Store app-preview video (ffmpeg) |
 
 A prompt named `store_screenshots` walks Claude through the whole flow. Then just say:
 *"Make App Store screenshots from ~/Desktop/habita-screens for my app Habita, English and Turkish, 3D."*
@@ -385,12 +396,35 @@ Language codes become store locales (`en → en-US`, `tr → tr` on Apple and `t
 shotforge create ./screens --app Habita --store appstore --header-sizes no --layout asc -o media
 # media/en-US/APP_IPHONE_67/01_en.png, media/tr/APP_IPHONE_67/…  — works with folder-based uploaders such as
 #   asc apps media upload com.example.MyApp --folder media/ --replace      (keremerkan/asc-cli)
-shotforge preview recording.mov -o preview.mp4      # 886x1920, 30 fps, H.264/AAC, ≤ 30 s (needs ffmpeg)
+shotforge preview recording.mov -o preview.mp4 --poster 5   # 886x1920, 30 fps, H.264/AAC, ≤ 30 s (needs ffmpeg); --poster also saves a poster-frame PNG
+shotforge slideshow ./raw-screens -o preview.mp4            # no recording? build the preview from real app screenshots (cross-fades, 15–30 s, loops)
 ```
 
 `--layout asc` folder names: `iphone-6.9 → APP_IPHONE_67`, `iphone-6.5 → APP_IPHONE_65`, `ipad-13 → APP_IPAD_PRO_3GEN_129`;
 `en → en-US`. Check them against your uploader's docs — Apple changes these identifiers over time. `shotforge sizes` prints the sizes.
 App previews are plain screen recordings (no frame added).
+
+### Apple asset guidance
+
+shotforge follows Apple's [asset best practices](https://developer.apple.com/app-store/asset-best-practices/) and the App Store Connect screenshot and app-preview specs where a tool can apply them:
+
+| Apple says | shotforge |
+|---|---|
+| Screenshots: PNG/JPEG, no alpha, 1–10 per size | Output is always RGB; `--count` is limited to 1–10 |
+| Short phrase as text, localized for every language, focal point centred | Headlines are copy per language; text stays near the centre (also for the header crop) |
+| No prices or discounts, URLs, © symbols, unverifiable claims, Apple recognitions or other platforms | **New:** a warning when the headline or subtitle contains any of these (App Store targets only) |
+| App preview: 15–30 s, ≤ 30 fps, H.264, AAC stereo, ≤ 500 MB, 886×1920 on iPhone 6.9" | `preview` and `slideshow` write exactly this |
+| Use the real UI; start strong; no quick cuts | **New:** `slideshow` builds the video from your raw app screenshots with slow cross-fades |
+| Audio is muted by default; the video autoplays and repeats | **New:** the video works silently and ends on its first page, so the loop is seamless |
+| Pick a poster frame that stands on its own (default 5 s) | **New:** `--poster SEC` saves that frame as a PNG |
+
+```bash
+shotforge slideshow ./raw-screens -o preview.mp4 --poster 5
+```
+
+![App Preview built from four app screenshots: three pages, then a cross-fade back to the first page for a seamless loop](examples/output/app_preview_frames.jpg)
+
+Give `slideshow` your raw app screenshots, not the framed marketing images, since Apple wants previews to show the real UI. Frames above: pages 1, 2 and 3, then the fade back to page 1. The MCP tool is `slideshow_app_preview`. Not covered yet: iPhone Duo and iPad 11" sizes, Mac/TV/Vision/Watch images, and ProRes previews.
 
 ## Backends, privacy and cost
 

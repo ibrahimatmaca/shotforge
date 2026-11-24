@@ -1081,6 +1081,8 @@ def cmd_sizes(_):
     print("\nApp Preview (H.264, 15–30 s, ≤30 fps, ≤500 MB, AAC stereo):")
     for k, (w, h) in PREVIEW_SIZES.items():
         print(f"  {k:12s} {w}x{h} (portrait)  /  {h}x{w} (landscape)")
+    print("\nApple asset guidance: ≤10 screenshots and ≤3 previews per size; no prices, URLs, © symbols, awards or other platforms in images;\n"
+          "previews show real UI, work muted, loop seamlessly and need a good poster frame (shotforge slideshow / preview --poster).")
 
 
 def cmd_doctor(_):
@@ -1126,6 +1128,7 @@ MCP_TOOLS = {
     "create_screenshots": "write separate images per page and language, plus an overview",
     "render_screenshots": "redraw from shotforge.copy.json after editing it",
     "convert_app_preview": "convert a screen recording to App Preview specs (ffmpeg)",
+    "slideshow_app_preview": "build an App Preview video from real app screenshots (ffmpeg)",
 }
 
 
@@ -1191,6 +1194,73 @@ def cmd_preview(a):
     cmd += ["-shortest", "-movflags", "+faststart", a.out]
     subprocess.run(cmd, check=True)
     print(f"Ready: {a.out} ({w}x{h}, 30 fps, H.264/AAC)")
+    poster = getattr(a, "poster", None)
+    if poster is not None:
+        _poster_frame(a.out, poster)
+
+
+def _poster_frame(video: str, at: float) -> str:
+    """App Store Connect lets you pick the poster frame (default 5 s). Writes <video>.poster.png at `at` seconds, a still that
+    works on its own as the first thing a visitor sees."""
+    dest = str(Path(video).with_suffix(".poster.png"))
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-protocol_whitelist", "file", "-ss", str(at), "-i", video,
+                    "-frames:v", "1", dest], check=True)
+    print(f"Poster frame: {dest} (at {at:g} s)")
+    return dest
+
+
+SLIDESHOW_FADE = 0.6  # seconds of cross-fade between pages
+
+
+def slideshow_plan(count: int, total: float | None = None) -> tuple[float, float]:
+    """(seconds per image, total seconds) for `count` images joined by cross-fades. Total is 15–30 s (App Preview limits),
+    ~3 s per page by default. The first image is shown again at the end so the autoplaying loop is seamless."""
+    k = count + 1
+    total = min(30.0, max(15.0, total if total else count * 3.0))
+    return round((total + (k - 1) * SLIDESHOW_FADE) / k, 3), total
+
+
+def cmd_slideshow(a):
+    """Build an App Preview from real app screenshots: cross-fades, 15–30 s, loops seamlessly, no audio needed (muted by default).
+    Uses ffmpeg only. Apple wants previews to show the real UI, so pass the raw app screenshots rather than the marketing images."""
+    if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
+        raise SystemExit("ffmpeg/ffprobe not found. macOS: brew install ffmpeg")
+    files: list[str] = []
+    for item in a.images:
+        pth = Path(item).expanduser()
+        found = sorted(q for q in pth.iterdir() if q.suffix.lower() in (".png", ".jpg", ".jpeg")) if pth.is_dir() else [pth]
+        files += [str(q.resolve()) for q in found]
+    files = files[:10]
+    if not files:
+        raise ValueError("no images given")
+    for f in files:
+        if not Path(f).is_file() or Path(f).suffix.lower() not in (".png", ".jpg", ".jpeg"):
+            raise ValueError(f"{f} is not a .png/.jpg image")
+    w, h = PREVIEW_SIZES[a.device]
+    if a.landscape:
+        w, h = h, w
+    seg, total = slideshow_plan(len(files), a.duration)
+    seq = files + [files[0]]
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-protocol_whitelist", "file"]
+    for f in seq:
+        cmd += ["-loop", "1", "-framerate", "30", "-t", f"{seg:.3f}", "-i", f]
+    cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
+    parts = [f"[{i}:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1,fps=30,format=yuv420p[v{i}]"
+             for i in range(len(seq))]
+    last, t = "v0", 0.0
+    for i in range(1, len(seq)):
+        t += seg - SLIDESHOW_FADE
+        out = f"x{i}"
+        parts.append(f"[{last}][v{i}]xfade=transition=fade:duration={SLIDESHOW_FADE}:offset={t:.3f}[{out}]")
+        last = out
+    parts.append(f"[{last}]format=yuv420p[vout]")  # xfade outputs 4:4:4; the High profile needs 4:2:0
+    cmd += ["-filter_complex", ";".join(parts), "-map", "[vout]", "-map", f"{len(seq)}:a:0", "-t", f"{total:.3f}",
+            "-c:v", "libx264", "-profile:v", "high", "-level", "4.0", "-b:v", "11M", "-maxrate", "12M", "-bufsize", "24M",
+            "-c:a", "aac", "-b:a", "256k", "-ar", "44100", "-ac", "2", "-shortest", "-movflags", "+faststart", a.out]
+    subprocess.run(cmd, check=True)
+    print(f"Ready: {a.out} ({w}x{h}, {total:g} s, {len(files)} pages, 30 fps, H.264/AAC)")
+    if getattr(a, "poster", None) is not None:
+        _poster_frame(a.out, a.poster)
 
 
 # --------------------------------------------------------------------------- #
@@ -1348,7 +1418,17 @@ def main(argv=None):
     pv.add_argument("--fit", default="cover", choices=["cover", "contain"])
     pv.add_argument("--pad-color", default="black")
     pv.add_argument("--extend", action="store_true")
+    pv.add_argument("--poster", type=float, default=None, metavar="SEC", help="also write a poster-frame PNG taken at this second (App Store default: 5)")
     pv.set_defaults(fn=cmd_preview)
+
+    sl = sub.add_parser("slideshow", help="build an App Preview video from real app screenshots (cross-fades, loops, ffmpeg)")
+    sl.add_argument("images", nargs="+", help="screenshot files or a folder (max 10)")
+    sl.add_argument("-o", "--out", default="preview.mp4")
+    sl.add_argument("--device", default="iphone-6.9", choices=PREVIEW_SIZES)
+    sl.add_argument("--landscape", action="store_true")
+    sl.add_argument("--duration", type=float, default=None, help="total seconds, 15–30 (default: 3 s per page)")
+    sl.add_argument("--poster", type=float, default=None, metavar="SEC", help="also write a poster-frame PNG taken at this second")
+    sl.set_defaults(fn=cmd_slideshow)
 
     argv = sys.argv[1:] if argv is None else argv
     a = ap.parse_args(argv or (["create"] if sys.stdin.isatty() else []))

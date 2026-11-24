@@ -226,3 +226,35 @@ def test_cli_reports_runtime_errors_without_traceback(tmp_path):
     bad.write_text("not an image", encoding="utf-8")
     with pytest.raises(SystemExit, match="Error:"):
         main(["analyze", str(bad)])
+
+
+def test_slideshow_plan_stays_inside_app_preview_limits():
+    for n in (1, 2, 5, 10):
+        seg, total = cli.slideshow_plan(n)
+        assert 15 <= total <= 30
+        k = n + 1
+        assert abs(k * seg - (k - 1) * cli.SLIDESHOW_FADE - total) < 0.01
+    assert cli.slideshow_plan(3, 99)[1] == 30 and cli.slideshow_plan(3, 5)[1] == 15
+
+
+def test_slideshow_only_reads_local_images(tmp_path, monkeypatch):
+    from PIL import Image
+    img = tmp_path / "a.png"
+    Image.new("RGB", (20, 40)).save(img)
+    calls = []
+    monkeypatch.setattr(cli.shutil, "which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr(cli.subprocess, "run", lambda cmd, **kw: calls.append(cmd))
+    cli.cmd_slideshow(argparse.Namespace(images=[str(img)], out=str(tmp_path / "o.mp4"), device="iphone-6.9", landscape=False,
+                                         duration=None, poster=5))
+    assert calls[0][calls[0].index("-protocol_whitelist") + 1] == "file"
+    assert calls[0].index("-protocol_whitelist") < calls[0].index("-i")
+    with pytest.raises(ValueError):
+        cli.cmd_slideshow(argparse.Namespace(images=[str(tmp_path / "x.txt")], out="o.mp4", device="iphone-6.9",
+                                             landscape=False, duration=None, poster=None))
+
+
+def test_apple_content_rules():
+    from shotforge.engine import apple_content_problems as f
+    assert f("Only $4.99 — 50% off") and f("Visit shotforge.com") and f("© 2026 Habita") and f("Editor's Choice")
+    assert f("Also on Google Play") and f("Award-winning habits")
+    assert not f("Build habits that stick")
