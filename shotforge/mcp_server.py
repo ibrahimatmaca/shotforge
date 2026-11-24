@@ -466,6 +466,31 @@ async def convert_app_preview(input_video: str, output_video: str, device: str =
     return f"Wrote {a.out}"
 
 
+@mcp.tool()
+@_safe
+async def slideshow_app_preview(images: list[str], output_video: str, device: str = "iphone-6.9", landscape: bool = False,
+                                duration: Optional[float] = None, poster: Optional[float] = None, overwrite: bool = False) -> str:
+    """Build an App Preview video (cross-fades, 15-30 s, 30 fps, H.264, silent AAC track, first page repeated so it loops) from
+    up to 10 real app screenshots or a folder of them, with ffmpeg. Use the raw app screenshots, not the framed marketing images:
+    Apple wants previews to show the real UI. poster = second at which to also write <video>.poster.png.
+    output_video must end in .mp4, .mov or .m4v; an existing file is replaced only with overwrite=true."""
+    import argparse as ap
+    _valid_device(device, PREVIEW_SIZES)
+    out = _abs(output_video)
+    if out.suffix.lower() not in (".mp4", ".mov", ".m4v"):
+        raise ValueError("output_video must end in .mp4, .mov or .m4v")
+    if out.exists() and not overwrite:
+        raise ValueError(f"{out} already exists; pass overwrite=true to replace it")
+    a = ap.Namespace(images=[str(_abs(i)) for i in images], out=str(out), device=device, landscape=landscape,
+                     duration=duration, poster=poster)
+
+    def run():
+        with _Quiet():
+            cli.cmd_slideshow(a)
+    await asyncio.to_thread(run)
+    return f"Wrote {a.out}"
+
+
 @mcp.prompt(name="store_screenshots", description="Guided workflow: ask the intake questions, then create separate store images per language")
 def store_screenshots_prompt(folder: str = "", app: str = "", about: str = "") -> str:
     return (

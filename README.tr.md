@@ -10,7 +10,17 @@ her dilde başlık metinlerini yazar. Bunların herhangi birini siz de belirleye
 
 *English: [README.md](README.md)*
 
-![2D ve 3D şablonlar](examples/output/compare_2d_vs_3d.jpg)
+![shotforge ile yapılmış tatil temalı App Store ekran görüntüleri: 3D telefon, vurgulu başlıklar, kar ve çıkartmalar](examples/output/showcase_hero.jpg)
+
+Tatil teması (`--theme holidays`), 3D şablon, 7 sayfa, her sayfa ayrı görsel:
+
+<img src="examples/output/showcase/01.jpg" width="13%" alt="Store screenshot 1 of 7">
+<img src="examples/output/showcase/02.jpg" width="13%" alt="Store screenshot 2 of 7">
+<img src="examples/output/showcase/03.jpg" width="13%" alt="Store screenshot 3 of 7">
+<img src="examples/output/showcase/04.jpg" width="13%" alt="Store screenshot 4 of 7">
+<img src="examples/output/showcase/05.jpg" width="13%" alt="Store screenshot 5 of 7">
+<img src="examples/output/showcase/06.jpg" width="13%" alt="Store screenshot 6 of 7">
+<img src="examples/output/showcase/07.jpg" width="13%" alt="Store screenshot 7 of 7">
 
 ## Özellikler
 
@@ -202,7 +212,7 @@ Claude Desktop / Cursor / diğer MCP istemcileri:
 (pipx ile kurduysanız `"command": "shotforge-mcp"` ve `args` yok.)
 
 Araçlar: `analyze_screenshots`, `list_templates`, `create_screenshots` (ayrı görselleri yazar; yollar + önizleme döner), `render_screenshots`
-(`shotforge.copy.json`'dan yeniden çizer), `convert_app_preview`. `store_screenshots` adlı prompt tüm akışı Claude'a anlatır. Sonra şunu söylemeniz yeter:
+(`shotforge.copy.json`'dan yeniden çizer), `convert_app_preview`, `slideshow_app_preview`. `store_screenshots` adlı prompt tüm akışı Claude'a anlatır. Sonra şunu söylemeniz yeter:
 *"~/Desktop/habita-screens içindeki ekranlardan Habita uygulamam için İngilizce ve Türkçe, 3D App Store görselleri yap."* Çıktı varsayılan olarak `~/shotforge-out` içine gider.
 
 ## Claude Code slash komutu
@@ -365,10 +375,33 @@ Dil kodları mağaza yerel ayarına çevrilir (`en → en-US`; `tr`, Apple'da `t
 ```bash
 shotforge create ./ekranlar --app Habita --store appstore --header-sizes no --layout asc -o media
 # media/en-US/APP_IPHONE_67/01_en.png, media/tr/APP_IPHONE_67/…   (klasör tabanlı yükleyicilerle:  asc apps media upload … --folder media/)
-shotforge preview kayit.mov -o preview.mp4      # 886x1920, 30 fps, H.264/AAC, ≤ 30 sn (ffmpeg gerekir)
+shotforge preview kayit.mov -o preview.mp4 --poster 5   # 886x1920, 30 fps, H.264/AAC, ≤ 30 sn (ffmpeg gerekir); --poster poster karesini PNG yazar
+shotforge slideshow ./ham-ekranlar -o preview.mp4        # kayıt yok mu? gerçek uygulama ekran görüntülerinden önizleme videosu (geçişli, 15–30 sn, döngüsel)
 ```
 
 `--layout asc` klasör adlarını (`APP_IPHONE_67` vb.) yükleyicinizin belgesiyle karşılaştırın; Apple zamanla bu adları değiştirir. App Preview ham ekran kaydıdır, çerçeve eklenmez.
+
+### Apple varlık kuralları
+
+shotforge, Apple'ın [asset best practices](https://developer.apple.com/app-store/asset-best-practices/) sayfasını ve App Store Connect ekran görüntüsü / önizleme şartlarını, bir araçla uygulanabildiği yerde izler:
+
+| Apple'ın kuralı | shotforge |
+|---|---|
+| Ekran görüntüsü: PNG/JPEG, alfa yok, boyut başına 1–10 | Çıktı hep RGB; `--count` 1–10 ile sınırlı |
+| Kısa metin, her dil için yerelleştirilmiş, odak noktası ortada | Başlıklar dil başına yazılır; metin ortaya yakın kalır |
+| Fiyat/indirim, URL, © simgesi, doğrulanamayan iddia, Apple ödülleri, başka platform yok | **Yeni:** başlık veya altyazıda bunlardan biri varsa uyarı (yalnızca App Store hedefleri) |
+| Önizleme: 15–30 sn, ≤ 30 fps, H.264, AAC stereo, ≤ 500 MB, iPhone 6.9" için 886×1920 | `preview` ve `slideshow` tam bunu yazar |
+| Gerçek arayüzü göster; güçlü başla; hızlı kesme yok | **Yeni:** `slideshow`, ham uygulama ekran görüntülerinden yavaş geçişli video yapar |
+| Ses varsayılan kapalı; video otomatik oynar ve tekrarlar | **Yeni:** video sessiz de çalışır, ilk sayfayla biter, döngü kesintisizdir |
+| Tek başına duran bir poster karesi seç (varsayılan 5 sn) | **Yeni:** `--poster SN` o kareyi PNG yazar |
+
+```bash
+shotforge slideshow ./ham-ekranlar -o preview.mp4 --poster 5
+```
+
+![Dört ekran görüntüsünden yapılan App Preview: üç sayfa, ardından kesintisiz döngü için ilk sayfaya geçiş](examples/output/app_preview_frames.jpg)
+
+`slideshow`'a çerçeveli pazarlama görsellerini değil, ham uygulama ekran görüntülerini verin; Apple önizlemede gerçek arayüz ister. MCP aracı `slideshow_app_preview`. Henüz yok: iPhone Duo ve iPad 11" boyutları, Mac/TV/Vision/Watch görselleri, ProRes önizleme.
 
 ## Backend'ler, gizlilik ve maliyet
 
